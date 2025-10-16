@@ -24,6 +24,10 @@ const Doctor = sequelize.define('Doctor' , {
         type : DataTypes.STRING,
         allowNull : true
     },
+    phoneNo : {
+        type : DataTypes.STRING,
+        allowNull : true
+    },
     password : {
         type : DataTypes.STRING,
         allowNull : false
