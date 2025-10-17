@@ -7,7 +7,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const doctorRoutes = require("./routes/doctorRoutes");
-const clinicRoutes = require("./routes/clinicRoutes")
+const clinicRoutes = require("./routes/clinicRoutes");
+const patientRoutes = require("./routes/patientroutes");
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({extended : true}));
@@ -22,6 +24,7 @@ app.get('/', (req, res) => {
 
 app.use("/api/doctor",doctorRoutes);
 app.use("/api/clinics" , clinicRoutes);
+app.use("/api/patient", patientRoutes);
 
 
 sequelize.authenticate()
