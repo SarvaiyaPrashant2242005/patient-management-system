@@ -22,8 +22,11 @@ class _ClinicPageState extends State<ClinicPage> {
     // Load patients when page initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final patientProvider = Provider.of<PatientProvider>(context, listen: false);
-      
+      final patientProvider = Provider.of<PatientProvider>(
+        context,
+        listen: false,
+      );
+
       if (authProvider.userEmail != null && widget.clinicData['name'] != null) {
         patientProvider.loadPatients(
           widget.clinicData['name']!,
@@ -34,7 +37,10 @@ class _ClinicPageState extends State<ClinicPage> {
   }
 
   // Open bottom sheet to add/edit patient
-  Future<void> _openPatientForm({Map<String, dynamic>? patient, int? index}) async {
+  Future<void> _openPatientForm({
+    Map<String, dynamic>? patient,
+    int? index,
+  }) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -49,10 +55,7 @@ class _ClinicPageState extends State<ClinicPage> {
         ),
         child: SizedBox(
           height: MediaQuery.of(context).size.height * 0.7,
-          child: PatientFormPage(
-            patient: patient,
-            patientIndex: index,
-          ),
+          child: PatientFormPage(patient: patient, patientIndex: index),
         ),
       ),
     );
@@ -63,11 +66,7 @@ class _ClinicPageState extends State<ClinicPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.person_outline,
-            size: 80,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.person_outline, size: 80, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
             'No Patients Added',
@@ -110,15 +109,20 @@ class _ClinicPageState extends State<ClinicPage> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              final patientProvider = Provider.of<PatientProvider>(context, listen: false);
+              final patientProvider = Provider.of<PatientProvider>(
+                context,
+                listen: false,
+              );
               final success = await patientProvider.deletePatient(index);
-              
+
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(success
-                        ? "Patient deleted successfully"
-                        : "Failed to delete patient"),
+                    content: Text(
+                      success
+                          ? "Patient deleted successfully"
+                          : "Failed to delete patient",
+                    ),
                     backgroundColor: success ? Colors.green : Colors.red,
                   ),
                 );
@@ -158,21 +162,18 @@ class _ClinicPageState extends State<ClinicPage> {
             const SizedBox(height: 2),
             Text(
               clinic['landline'] ?? '',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
+
       ),
       body: Consumer<PatientProvider>(
         builder: (context, patientProvider, _) {
           // Show loader while initial loading
           if (patientProvider.isInitialLoading) {
-            return const Center(
-              child: AppLoader(size: 120),
-            );
+            return const Center(child: AppLoader(size: 120));
           }
 
           // Show empty state if no patients
@@ -200,64 +201,65 @@ class _ClinicPageState extends State<ClinicPage> {
                     itemCount: patientProvider.patients.length,
                     itemBuilder: (context, index) {
                       final patient = patientProvider.patients[index];
-                        return Card(
-                          color: Colors.white,
-                          elevation: 1,
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                      return Card(
+                        color: Colors.white,
+                        elevation: 1,
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Colors.blue,
+                            child: Icon(Icons.person, color: Colors.white),
                           ),
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.blue,
-                              child: Icon(Icons.person, color: Colors.white),
-                            ),
-                            title: Text(patient['name'] ?? 'Unknown'),
-                            subtitle: Text(
-                              "${patient['mobile'] ?? 'N/A'}",
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      PatientScreenPage(patientData: patient),
+                          title: Text(patient['name'] ?? 'Unknown'),
+                          subtitle: Text("${patient['mobile'] ?? 'N/A'}"),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PatientScreenPage(
+                                  patientData: patient,
+                                  clinicName: widget.clinicData['name'] ?? '',
+                                  clinicData: widget.clinicData,
                                 ),
-                              );
-                            },
-                            trailing: Wrap(
-                              spacing: 8,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.edit,
-                                    color: Colors.blue,
-                                  ),
-                                  onPressed: () => _openPatientForm(
-                                    patient: patient,
-                                    index: index,
-                                  ),
+                              ),
+                            );
+                          },
+                          trailing: Wrap(
+                            spacing: 8,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: Colors.blue,
                                 ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                  ),
-                                  onPressed: () => _deletePatient(
-                                    index,
-                                    patient['name'] ?? 'Unknown',
-                                  ),
+                                onPressed: () => _openPatientForm(
+                                  patient: patient,
+                                  index: index,
                                 ),
-                              ],
-                            ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _deletePatient(
+                                  index,
+                                  patient['name'] ?? 'Unknown',
+                                ),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
-                ],
-              ),
-            );
+                ),
+              ],
+            ),
+          );
         },
       ),
       floatingActionButton: FloatingActionButton(
