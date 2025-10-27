@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../data/providers/auth_provider.dart';
 import '../../../shared/widgets/loader.dart';
+import '../../home/views/home_page.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -56,7 +57,11 @@ class _SignUpPageState extends State<SignUpPage> {
               backgroundColor: Colors.green,
             ),
           );
-          Navigator.pop(context);
+          // Navigate to HomePage after successful signup
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomePage()),
+          );
         }
       }
     }
