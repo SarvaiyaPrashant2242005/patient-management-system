@@ -78,14 +78,14 @@ class _SplashPageState extends State<SplashPage>
                           children: [
                             // Doctor Logo
                             Image.asset(
-                              'assets/icons/doctor_logo.png',
+                              'assets/icons/app_logo.png',
                               width: 150,
                               height: 150,
                             ),
                             const SizedBox(height: 24),
                             // App Name
                             const Text(
-                              'Doctor App',
+                              'Med Track',
                               style: TextStyle(
                                 fontSize: 32,
                                 fontWeight: FontWeight.bold,
