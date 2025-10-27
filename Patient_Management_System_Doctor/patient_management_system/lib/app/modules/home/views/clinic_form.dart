@@ -20,6 +20,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
   final _landlineController = TextEditingController();
   final _doctorNameController = TextEditingController();
   final _addressController = TextEditingController();
+  final _chargesController = TextEditingController();
   bool _isSubmitting = false;
 
   @override
@@ -30,6 +31,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
       _landlineController.text = widget.clinic!['landline'] ?? '';
       _doctorNameController.text = widget.clinic!['doctorName'] ?? '';
       _addressController.text = widget.clinic!['address'] ?? '';
+      _chargesController.text = widget.clinic!['charges'] ?? '';
     }
   }
 
@@ -39,6 +41,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
     _landlineController.dispose();
     _doctorNameController.dispose();
     _addressController.dispose();
+    _chargesController.dispose();
     super.dispose();
   }
 
@@ -51,6 +54,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
       'landline': _landlineController.text.trim(),
       'doctorName': _doctorNameController.text.trim(),
       'address': _addressController.text.trim(),
+      'charges': _chargesController.text.trim(),
     };
 
     setState(() => _isSubmitting = true);
@@ -186,6 +190,31 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
               ),
               validator: (v) =>
                   v == null || v.trim().isEmpty ? 'Address is required' : null,
+            ),
+            const SizedBox(height: 12),
+
+            _buildLabel("Consultation Charges", true),
+            const SizedBox(height: 5),
+            TextFormField(
+              controller: _chargesController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              decoration: _buildDecoration(
+                hint: "Enter consultation charges",
+                icon: Icons.currency_rupee_outlined,
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return 'Charges are required';
+                }
+                final amount = int.tryParse(v.trim());
+                if (amount == null || amount <= 0) {
+                  return 'Please enter a valid amount';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 25),
 
