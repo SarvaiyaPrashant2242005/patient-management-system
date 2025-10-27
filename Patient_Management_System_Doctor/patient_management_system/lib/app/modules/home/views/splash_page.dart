@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:patient_management_system/app/modules/auth/views/LoginPage.dart';
+import 'package:patient_management_system/app/modules/home/views/home_page.dart';
+import 'package:patient_management_system/app/data/providers/auth_provider.dart';
+import 'package:provider/provider.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -39,15 +42,34 @@ class _SplashPageState extends State<SplashPage>
 
     _controller.forward();
 
-    // Navigate to login page after 4 seconds
-    Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginPage()),
-        );
-      }
-    });
+    // Check authentication status and navigate accordingly
+    _checkAuthAndNavigate();
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    // Wait for animation to complete
+    await Future.delayed(const Duration(seconds: 4));
+    
+    if (!mounted) return;
+    
+    // Load user authentication state
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.loadUser();
+    
+    if (!mounted) return;
+    
+    // Navigate based on authentication state
+    if (authProvider.isLoggedIn) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomePage()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginPage()),
+      );
+    }
   }
 
   @override
