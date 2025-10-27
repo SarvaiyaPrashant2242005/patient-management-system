@@ -22,8 +22,11 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final clinicProvider = Provider.of<ClinicProvider>(context, listen: false);
-      
+      final clinicProvider = Provider.of<ClinicProvider>(
+        context,
+        listen: false,
+      );
+
       if (authProvider.userEmail != null) {
         clinicProvider.loadClinics(authProvider.userEmail!);
       }
@@ -41,10 +44,7 @@ class _HomePageState extends State<HomePage> {
           ),
           title: const Text(
             'Logout',
-            style: TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
           ),
           content: const Text(
             'Are you sure you want to logout?',
@@ -53,17 +53,18 @@ class _HomePageState extends State<HomePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.black87,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.black87),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(context);
-                final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                final authProvider = Provider.of<AuthProvider>(
+                  context,
+                  listen: false,
+                );
                 await authProvider.logOutUser();
-                
+
                 if (mounted) {
                   Navigator.pushReplacement(
                     context,
@@ -109,15 +110,20 @@ class _HomePageState extends State<HomePage> {
             ElevatedButton(
               onPressed: () async {
                 Navigator.pop(context);
-                final clinicProvider = Provider.of<ClinicProvider>(context, listen: false);
+                final clinicProvider = Provider.of<ClinicProvider>(
+                  context,
+                  listen: false,
+                );
                 final success = await clinicProvider.deleteClinic(index);
-                
+
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(success
-                          ? 'Clinic deleted successfully'
-                          : 'Failed to delete clinic'),
+                      content: Text(
+                        success
+                            ? 'Clinic deleted successfully'
+                            : 'Failed to delete clinic',
+                      ),
                       backgroundColor: success ? Colors.green : Colors.red,
                     ),
                   );
@@ -151,7 +157,7 @@ class _HomePageState extends State<HomePage> {
       builder: (context, authProvider, _) {
         final userName = authProvider.userName ?? 'Doctor';
         final userEmail = authProvider.userEmail ?? 'email@example.com';
-        
+
         return Scaffold(
           backgroundColor: Colors.grey[200],
           appBar: AppBar(
@@ -178,12 +184,14 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+            iconTheme: const IconThemeData(color: Colors.white),
           ),
           drawer: Drawer(
-            child: ListView(
-              padding: EdgeInsets.zero,
+            child: Column(
               children: [
-                DrawerHeader(
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
                   decoration: const BoxDecoration(color: Colors.blue),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,41 +206,55 @@ class _HomePageState extends State<HomePage> {
                         userName,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         userEmail,
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
                 ),
-            ListTile(
-              leading: const Icon(Icons.home_outlined),
-              title: const Text('Home'),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.local_hospital_outlined),
-              title: const Text('My Clinics'),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.calendar_today_outlined),
-              title: const Text('Appointments'),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Settings'),
-              onTap: () {},
-            ),
-            const Divider(),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.home_outlined),
+                        title: const Text('Home'),
+                        onTap: () => Navigator.pop(context),
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.local_hospital_outlined),
+                        title: const Text('My Clinics'),
+                        onTap: () {},
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.calendar_today_outlined),
+                        title: const Text('Appointments'),
+                        onTap: () {},
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.settings_outlined),
+                        title: const Text('Settings'),
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.logout, color: Colors.red),
-                  title: const Text('Logout', style: TextStyle(color: Colors.red)),
+                  title: const Text(
+                    'Logout',
+                    style: TextStyle(color: Colors.red),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _handleLogout();
@@ -245,9 +267,7 @@ class _HomePageState extends State<HomePage> {
             builder: (context, clinicProvider, _) {
               // Show loader while initial loading
               if (clinicProvider.isInitialLoading) {
-                return const Center(
-                  child: AppLoader(size: 120),
-                );
+                return const Center(child: AppLoader(size: 120));
               }
 
               // Show empty state if no clinics
@@ -307,9 +327,15 @@ class _HomePageState extends State<HomePage> {
   Widget _buildClinicCard(int index, Map<String, String> clinic) {
     return InkWell(
       onTap: () {
+        // This print statement helps confirm the code is running correctly.
+        // Check your debug console for this message when you tap a clinic.
+        print("Navigating to ClinicPage and setting its name to '/clinic'");
+
         Navigator.push(
           context,
           MaterialPageRoute(
+            // This line is crucial for the navigation to work correctly later.
+            settings: const RouteSettings(name: '/clinic'),
             builder: (context) => ClinicPage(clinicData: clinic),
           ),
         );
@@ -372,34 +398,76 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 10),
 
+              // Charges and Action Buttons Row
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  TextButton.icon(
-                    onPressed: () async {
-                      await showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        showDragHandle: true,
-                        backgroundColor: Colors.white,
-                        builder: (_) => ClinicFormPage(
-                          clinic: clinic,
-                          clinicIndex: index,
+                  // Charges Display (Bottom Left)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.currency_rupee,
+                          size: 16,
+                          color: Colors.green.shade700,
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    label: const Text('Edit'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                        const SizedBox(width: 4),
+                        Text(
+                          clinic['charges'] ?? '0',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 5),
-                  TextButton.icon(
-                    onPressed: () => _deleteClinic(index, clinic['name']!),
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('Delete'),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  // Edit and Delete Buttons
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () async {
+                          await showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            showDragHandle: true,
+                            backgroundColor: Colors.white,
+                            builder: (_) => ClinicFormPage(
+                              clinic: clinic,
+                              clinicIndex: index,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('Edit'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      TextButton.icon(
+                        onPressed: () => _deleteClinic(index, clinic['name']!),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Delete'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -411,6 +479,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+// The rest of your file remains unchanged
 class AddClinicSheet extends StatefulWidget {
   final Future<void> Function() onAdded;
   final Function(Map<String, String>) onSubmit;
