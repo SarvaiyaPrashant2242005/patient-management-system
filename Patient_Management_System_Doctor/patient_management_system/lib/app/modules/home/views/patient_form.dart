@@ -27,7 +27,7 @@ class _PatientFormPageState extends State<PatientFormPage> {
 
   String? _gender;
   bool _isSubmitting = false;
-  bool _manualDob = false; // Manual DOB toggle
+  DateTime? _selectedDob;
 
   @override
   void initState() {
@@ -37,7 +37,15 @@ class _PatientFormPageState extends State<PatientFormPage> {
     if (widget.patient != null) {
       _nameController.text = widget.patient!['name'] ?? '';
       _mobileController.text = widget.patient!['mobile'] ?? '';
-      _dobController.text = widget.patient!['dob'] ?? '';
+      final dobStr = widget.patient!['dob'] ?? '';
+      if (dobStr.isNotEmpty) {
+        try {
+          _selectedDob = DateFormat('dd-MM-yyyy').parse(dobStr);
+          _dobController.text = dobStr;
+        } catch (_) {
+          // Try parsing other formats if needed
+        }
+      }
       _ageController.text = widget.patient!['age'] ?? '';
       _gender = widget.patient!['gender'];
       _heightController.text = widget.patient!['height'] ?? '';
@@ -56,31 +64,33 @@ class _PatientFormPageState extends State<PatientFormPage> {
     super.dispose();
   }
 
-  // 🔹 When age is entered → auto-generate DOB as Jan 1 of (currentYear - age)
-  void _updateDobFromAge(String ageText) {
-    if (_manualDob) return; // skip auto if manual DOB enabled
-    if (ageText.isEmpty) {
-      _dobController.clear();
-      return;
+  // Calculate age from DOB
+  void _calculateAgeFromDob() {
+    if (_selectedDob == null) return;
+    final today = DateTime.now();
+    int age = today.year - _selectedDob!.year;
+    if (today.month < _selectedDob!.month ||
+        (today.month == _selectedDob!.month && today.day < _selectedDob!.day)) {
+      age--;
     }
-    final age = int.tryParse(ageText);
-    if (age == null) return;
-
-    final currentYear = DateTime.now().year;
-    final birthYear = currentYear - age;
-    final dob = DateTime(birthYear, 1, 1);
-    _dobController.text = DateFormat('yyyy-MM-dd').format(dob);
+    _ageController.text = age.toString();
   }
 
-  // 🔹 Update age if DOB manually changed
-  void _updateAgeFromDob(String dobText) {
-    if (dobText.isEmpty) return;
-    try {
-      final dob = DateFormat('yyyy-MM-dd').parse(dobText);
-      final today = DateTime.now();
-      final age = today.year - dob.year;
-      _ageController.text = age.toString();
-    } catch (_) {}
+  // Show date picker for DOB
+  Future<void> _selectDob() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDob ?? DateTime.now(),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDob = picked;
+        _dobController.text = DateFormat('dd-MM-yyyy').format(picked);
+        _calculateAgeFromDob();
+      });
+    }
   }
 
   Future<void> _submitForm() async {
@@ -179,12 +189,22 @@ class _PatientFormPageState extends State<PatientFormPage> {
                 TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z ]')),
+                  ],
                   decoration: _buildInputDecoration(
                     hintText: 'Enter patient name',
                     prefixIcon: Icons.person_outline,
                   ),
-                  validator: (v) =>
-                  v == null || v.trim().isEmpty ? 'Name is required' : null,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Name is required';
+                    }
+                    if (!RegExp(r'^[a-zA-Z ]+$').hasMatch(v.trim())) {
+                      return 'Only alphabets and spaces allowed';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 10),
 
@@ -211,74 +231,65 @@ class _PatientFormPageState extends State<PatientFormPage> {
                 ),
                 const SizedBox(height: 10),
 
-                // Age
-                _buildLabel("Age", isRequired: true),
-                const SizedBox(height: 5),
-                TextFormField(
-                  controller: _ageController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _buildInputDecoration(
-                    hintText: 'Enter age in years',
-                    prefixIcon: Icons.calendar_today_outlined,
-                  ),
-                  onChanged: _updateDobFromAge,
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Age is required';
-                    final age = int.tryParse(v);
-                    if (age == null || age < 0 || age > 120) {
-                      return 'Enter a valid age';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 10),
-
-                // DOB (Auto / Manual)
-                _buildLabel("Date of Birth", isRequired: false),
-                const SizedBox(height: 5),
-                TextFormField(
-                  controller: _dobController,
-                  readOnly: !_manualDob,
-                  onTap: _manualDob
-                      ? () async {
-                    DateTime? picked = await showDatePicker(
-                      context: context,
-                      initialDate: _dobController.text.isNotEmpty
-                          ? DateFormat('yyyy-MM-dd')
-                          .parse(_dobController.text)
-                          : DateTime.now(),
-                      firstDate: DateTime(1900),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) {
-                      _dobController.text =
-                          DateFormat('yyyy-MM-dd').format(picked);
-                      _updateAgeFromDob(_dobController.text);
-                    }
-                  }
-                      : null,
-                  onChanged: _manualDob
-                      ? (val) => _updateAgeFromDob(val)
-                      : null,
-                  decoration: _buildInputDecoration(
-                    hintText: _manualDob
-                        ? 'Enter or pick DOB manually'
-                        : 'Auto-filled based on age (1st Jan)',
-                    prefixIcon: Icons.cake_outlined,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Toggle manual DOB
-                TextButton.icon(
-                  onPressed: () => setState(() => _manualDob = !_manualDob),
-                  icon: Icon(
-                    _manualDob ? Icons.toggle_on : Icons.toggle_off,
-                    color: Colors.blue,
-                  ),
-                  label: Text(
-                      _manualDob ? 'Manual DOB Enabled' : 'Manual DOB Disabled'),
+                // DOB and Age in one row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Date of Birth", isRequired: true),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _dobController,
+                            readOnly: true,
+                            onTap: _selectDob,
+                            decoration: _buildInputDecoration(
+                              hintText: 'DD-MM-YYYY',
+                              prefixIcon: Icons.cake_outlined,
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'DOB is required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Age", isRequired: true),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _ageController,
+                            readOnly: _selectedDob != null,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            decoration: _buildInputDecoration(
+                              hintText: 'Age',
+                              prefixIcon: Icons.calendar_today_outlined,
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Age is required';
+                              final age = int.tryParse(v);
+                              if (age == null || age < 0 || age > 120) {
+                                return 'Enter a valid age';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
 
@@ -299,29 +310,72 @@ class _PatientFormPageState extends State<PatientFormPage> {
                 ),
                 const SizedBox(height: 10),
 
-                // Height
-                _buildLabel("Height (cm)", isRequired: false),
-                const SizedBox(height: 5),
-                TextFormField(
-                  controller: _heightController,
-                  keyboardType: TextInputType.number,
-                  decoration: _buildInputDecoration(
-                    hintText: 'Enter height in centimeters',
-                    prefixIcon: Icons.height_outlined,
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Weight
-                _buildLabel("Weight (kg)", isRequired: false),
-                const SizedBox(height: 5),
-                TextFormField(
-                  controller: _weightController,
-                  keyboardType: TextInputType.number,
-                  decoration: _buildInputDecoration(
-                    hintText: 'Enter weight in kilograms',
-                    prefixIcon: Icons.monitor_weight_outlined,
-                  ),
+                // Height and Weight in one row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Height (cm)", isRequired: false),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _heightController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(4),
+                            ],
+                            decoration: _buildInputDecoration(
+                              hintText: 'Height',
+                              prefixIcon: Icons.height_outlined,
+                            ),
+                            validator: (v) {
+                              if (v != null && v.isNotEmpty) {
+                                final height = int.tryParse(v);
+                                if (height == null || height > 1000) {
+                                  return 'Max 1000 cm';
+                                }
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Weight (kg)", isRequired: false),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _weightController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(4),
+                            ],
+                            decoration: _buildInputDecoration(
+                              hintText: 'Weight',
+                              prefixIcon: Icons.monitor_weight_outlined,
+                            ),
+                            validator: (v) {
+                              if (v != null && v.isNotEmpty) {
+                                final weight = int.tryParse(v);
+                                if (weight == null || weight > 1000) {
+                                  return 'Max 1000 kg';
+                                }
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 25),
 
