@@ -23,6 +23,10 @@ const Clinic = sequelize.define('Clinic', {
         type: DataTypes.TEXT,
         allowNull: true
     },
+    price_per_day : {
+        type : DataTypes.STRING,
+        allowNull : false
+    },
     doctor_id: {
         type: DataTypes.INTEGER,
         allowNull: false,
