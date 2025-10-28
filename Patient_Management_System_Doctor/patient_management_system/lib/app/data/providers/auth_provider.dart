@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const String demoEmail = 'demo@medtrack.com';
@@ -11,6 +12,7 @@ class AuthProvider extends ChangeNotifier {
   String? _userEmail;
   String? _userName;
   bool _isLoggedIn = false;
+  String? _token;
 
   bool get isLoading => _isLoading;
 
@@ -21,6 +23,7 @@ class AuthProvider extends ChangeNotifier {
   String? get userName => _userName;
 
   bool get isLoggedIn => _isLoggedIn;
+  String? get token => _token;
 
   // Set loader
   void setLoading(bool value) {
@@ -33,14 +36,10 @@ class AuthProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-      
-      if (isLoggedIn) {
-        _userEmail = prefs.getString('email');
-        _userName = prefs.getString('userName');
-        _isLoggedIn = _userEmail != null && _userName != null;
-      } else {
-        _isLoggedIn = false;
-      }
+      _token = prefs.getString('token');
+      _userEmail = prefs.getString('email');
+      _userName = prefs.getString('userName');
+      _isLoggedIn = isLoggedIn && _token != null;
       notifyListeners();
     } catch (e) {
       _isLoggedIn = false;
@@ -49,40 +48,30 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Signup logic...
-  Future<bool> signUpUser(String name, String email, String password) async {
+  Future<bool> signUpUser(String name, String email, String password, {String degree = '', String phoneNo = ''}) async {
     setLoading(true);
     _errorMessage = null;
     
     try {
-      // Simulate network delay for demo
-      await Future.delayed(const Duration(seconds: 1));
-      
-      final prefs = await SharedPreferences.getInstance();
+      final response = await ApiService.post('doctor/register', {
+        'fullname': name,
+        'email': email,
+        'password': password,
+        'degree': degree,
+        'phoneNo': phoneNo,
+      });
 
-      // Check if user already exists
-      final existingEmail = prefs.getString('email');
-      if (existingEmail != null && existingEmail == email) {
-        _errorMessage = "User with this email already exists";
-        _isLoggedIn = false;
+      if (response != null && response['doctorId'] != null) {
+        // Auto-login after successful registration
+        final loggedIn = await login(email, password);
         setLoading(false);
-        return false;
+        return loggedIn;
       }
-      
-      // Save user data
-      await prefs.setString('userName', name);
-      await prefs.setString('email', email);
-      await prefs.setString('password', password);
-      await prefs.setBool('isLoggedIn', true);
-
-      _userEmail = email;
-      _userName = name;
-      _errorMessage = null;
-      _isLoggedIn = true;
-      
+      _errorMessage = 'Registration failed';
       setLoading(false);
-      return true;
+      return false;
     } catch (e) {
-      _errorMessage = "Sign up failed. Please try again.";
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
       _isLoggedIn = false;
       setLoading(false);
       return false;
@@ -95,50 +84,34 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      // Simulate network delay for demo
-      await Future.delayed(const Duration(seconds: 1));
-      
-      final prefs = await SharedPreferences.getInstance();
-      
-      // Check demo credentials first
-      if (email == demoEmail && password == demoPassword) {
-        await prefs.setString('userName', demoName);
-        await prefs.setString('email', demoEmail);
-        await prefs.setBool('isLoggedIn', true);
-        
-        _userEmail = demoEmail;
-        _userName = demoName;
-        _isLoggedIn = true;
-        _errorMessage = null;
-        
-        setLoading(false);
-        return true;
-      }
-      
-      // Check saved credentials
-      final savedEmail = prefs.getString('email');
-      final savedPassword = prefs.getString('password');
-      final savedName = prefs.getString('userName');
+      final response = await ApiService.post('doctor/login', {
+        'email': email,
+        'password': password,
+      });
 
-      if (email == savedEmail && password == savedPassword) {
-        await prefs.setBool('isLoggedIn', true);
-        
-        _userEmail = savedEmail;
-        _userName = savedName;
-        _isLoggedIn = true;
-        _errorMessage = null;
-        
-        setLoading(false);
-        return true;
-      } else {
-        _errorMessage = 'Invalid email or password';
-        _isLoggedIn = false;
-        
+      _token = response['token'];
+      final doctor = response['doctor'];
+
+      if (_token == null || doctor == null) {
+        _errorMessage = 'Invalid server response';
         setLoading(false);
         return false;
       }
+
+      _userEmail = doctor['email'];
+      _userName = doctor['fullname'];
+      _isLoggedIn = true;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', _token!);
+      await prefs.setString('email', _userEmail!);
+      await prefs.setString('userName', _userName!);
+      await prefs.setBool('isLoggedIn', true);
+
+      setLoading(false);
+      return true;
     } catch (e) {
-      _errorMessage = 'Login failed. Please try again.';
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
       _isLoggedIn = false;
       
       setLoading(false);
@@ -152,12 +125,13 @@ class AuthProvider extends ChangeNotifier {
     
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', false);
+      await prefs.clear();
 
       _userName = null;
       _userEmail = null;
       _isLoggedIn = false;
       _errorMessage = null;
+      _token = null;
       
       setLoading(false);
       notifyListeners();

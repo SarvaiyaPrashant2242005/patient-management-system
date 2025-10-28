@@ -52,7 +52,7 @@ const doctorController = {
                 doctor: {
                     id: doctor.id,
                     email: doctor.email,
-                    fullname: doctor.fullname,
+                    fullname: doctor.fullname,    
                     degree: doctor.degree,
                     phoneNo: doctor.phoneNo
                 }

@@ -12,7 +12,18 @@ const patientRoutes = require("./routes/patientroutes");
 const prescriptionRoutes = require("./routes/prescriptionRoutes");
 const pDose = require("./routes/pDoseRoutes");
 
-app.use(cors());
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({extended : true}));
 

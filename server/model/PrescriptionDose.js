@@ -32,7 +32,7 @@ const pDose = sequelize.define('pDose', {
     allowNull: false
   },
   time_of_day: {
-    type: DataTypes.ENUM('morning', 'afternoon', 'evening'),
+    type: DataTypes.ENUM('morning', 'afternoon', 'evening','night'),
     allowNull: false
   },
   meal_time: {
