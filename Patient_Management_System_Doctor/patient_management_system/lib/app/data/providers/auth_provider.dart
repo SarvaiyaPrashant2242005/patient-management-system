@@ -10,6 +10,8 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
   String? _userEmail;
   String? _userName;
+  String? _userDegree;
+  String? _userPhone;
   bool _isLoggedIn = false;
 
   bool get isLoading => _isLoading;
@@ -19,6 +21,10 @@ class AuthProvider extends ChangeNotifier {
   String? get userEmail => _userEmail;
 
   String? get userName => _userName;
+
+  String? get userDegree => _userDegree;
+
+  String? get userPhone => _userPhone;
 
   bool get isLoggedIn => _isLoggedIn;
 
@@ -37,6 +43,8 @@ class AuthProvider extends ChangeNotifier {
       if (isLoggedIn) {
         _userEmail = prefs.getString('email');
         _userName = prefs.getString('userName');
+        _userDegree = prefs.getString('degree');
+        _userPhone = prefs.getString('phone');
         _isLoggedIn = _userEmail != null && _userName != null;
       } else {
         _isLoggedIn = false;
@@ -49,7 +57,13 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // Signup logic...
-  Future<bool> signUpUser(String name, String email, String password) async {
+  Future<bool> signUpUser(
+    String name,
+    String email,
+    String password, {
+    String? degree,
+    String? phone,
+  }) async {
     setLoading(true);
     _errorMessage = null;
     
@@ -72,10 +86,18 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setString('userName', name);
       await prefs.setString('email', email);
       await prefs.setString('password', password);
+      if (degree != null && degree.isNotEmpty) {
+        await prefs.setString('degree', degree);
+      }
+      if (phone != null && phone.isNotEmpty) {
+        await prefs.setString('phone', phone);
+      }
       await prefs.setBool('isLoggedIn', true);
 
       _userEmail = email;
       _userName = name;
+      _userDegree = degree;
+      _userPhone = phone;
       _errorMessage = null;
       _isLoggedIn = true;
       
@@ -119,12 +141,16 @@ class AuthProvider extends ChangeNotifier {
       final savedEmail = prefs.getString('email');
       final savedPassword = prefs.getString('password');
       final savedName = prefs.getString('userName');
+      final savedDegree = prefs.getString('degree');
+      final savedPhone = prefs.getString('phone');
 
       if (email == savedEmail && password == savedPassword) {
         await prefs.setBool('isLoggedIn', true);
         
         _userEmail = savedEmail;
         _userName = savedName;
+        _userDegree = savedDegree;
+        _userPhone = savedPhone;
         _isLoggedIn = true;
         _errorMessage = null;
         
@@ -156,6 +182,8 @@ class AuthProvider extends ChangeNotifier {
 
       _userName = null;
       _userEmail = null;
+      _userDegree = null;
+      _userPhone = null;
       _isLoggedIn = false;
       _errorMessage = null;
       
@@ -171,5 +199,52 @@ class AuthProvider extends ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  // Update profile data
+  Future<bool> updateProfile({
+    String? name,
+    String? email,
+    String? degree,
+    String? phone,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      if (name != null) {
+        await prefs.setString('userName', name);
+        _userName = name;
+      }
+      
+      if (email != null) {
+        await prefs.setString('email', email);
+        _userEmail = email;
+      }
+      
+      if (degree != null) {
+        if (degree.isEmpty) {
+          await prefs.remove('degree');
+          _userDegree = null;
+        } else {
+          await prefs.setString('degree', degree);
+          _userDegree = degree;
+        }
+      }
+      
+      if (phone != null) {
+        if (phone.isEmpty) {
+          await prefs.remove('phone');
+          _userPhone = null;
+        } else {
+          await prefs.setString('phone', phone);
+          _userPhone = phone;
+        }
+      }
+      
+      notifyListeners();
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }
