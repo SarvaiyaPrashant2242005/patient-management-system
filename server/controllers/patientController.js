@@ -1,7 +1,6 @@
 const Clinic = require('../model/clinic');
 const Doctor = require('../model/doctors');
 const Patient = require('../model/patient');
-const patient = require("../model/patient");
 
 
 const patientController = {
