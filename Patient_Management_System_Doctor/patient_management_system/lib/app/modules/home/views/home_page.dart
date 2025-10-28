@@ -4,6 +4,8 @@ import 'package:patient_management_system/app/data/providers/auth_provider.dart'
 import 'package:patient_management_system/app/data/providers/clinic_provider.dart';
 import 'package:patient_management_system/app/modules/auth/views/LoginPage.dart';
 import 'package:patient_management_system/app/modules/home/views/clinic_screen.dart';
+import 'package:patient_management_system/app/modules/home/views/patient_details.dart';
+import 'package:patient_management_system/app/modules/home/views/profile_screen.dart';
 import 'package:patient_management_system/app/shared/widgets/loader.dart';
 import 'package:provider/provider.dart';
 
@@ -233,17 +235,38 @@ class _HomePageState extends State<HomePage> {
                       ListTile(
                         leading: const Icon(Icons.local_hospital_outlined),
                         title: const Text('My Clinics'),
-                        onTap: () {},
+                        onTap: () => Navigator.pop(context),
                       ),
                       ListTile(
                         leading: const Icon(Icons.calendar_today_outlined),
-                        title: const Text('Appointments'),
-                        onTap: () {},
+                        title: const Text('My Patients'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const PatientDetailsPage(),
+                            ),
+                          );
+                        },
                       ),
+                      // ListTile(
+                      //   leading: const Icon(Icons.settings_outlined),
+                      //   title: const Text('Settings'),
+                      //   onTap: () {},
+                      // ),
                       ListTile(
-                        leading: const Icon(Icons.settings_outlined),
-                        title: const Text('Settings'),
-                        onTap: () {},
+                        leading: const Icon(Icons.person_2_outlined),
+                        title: const Text('Profile'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DoctorProfileScreen(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
