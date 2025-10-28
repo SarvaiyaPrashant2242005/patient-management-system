@@ -374,7 +374,9 @@ class _CheckupScreenState extends State<CheckupScreen> {
                   );
                 },
                 suggestionsCallback: (pattern) {
-                  if (pattern.isEmpty) return [];
+                  // Show all symptoms when field is empty (user just focused)
+                  if (pattern.isEmpty) return _commonSymptoms;
+                  // Filter symptoms based on user input
                   return _commonSymptoms
                       .where((symptom) =>
                           symptom.toLowerCase().contains(pattern.toLowerCase()))
