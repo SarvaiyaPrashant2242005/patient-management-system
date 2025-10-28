@@ -24,6 +24,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
   bool _morningChecked = false;
   bool _afternoonChecked = false;
   bool _eveningChecked = false;
+  bool _nightChecked = false;
   String _mealTiming = 'Before';
   
   // List to store added medicines
@@ -39,10 +40,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
 
   void _handleAddMedicine() {
     if (_formKey.currentState!.validate()) {
-      if (!_morningChecked && !_afternoonChecked && !_eveningChecked) {
+      if (!_morningChecked && !_afternoonChecked && !_eveningChecked && !_nightChecked) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please select at least one time (Morning/Afternoon/Evening)'),
+            content: Text('Please select at least one time'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -56,6 +57,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
         'morning': _morningChecked,
         'afternoon': _afternoonChecked,
         'evening': _eveningChecked,
+        'night': _nightChecked,
         'mealTiming': _mealTiming,
         'quantity': _selectedMedicineType == 'Syrup' ? _quantityController.text.trim() : null,
       };
@@ -81,6 +83,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
         _morningChecked = false;
         _afternoonChecked = false;
         _eveningChecked = false;
+        _nightChecked = false;
         _mealTiming = 'Before';
       });
     }
@@ -452,41 +455,73 @@ class _MedicineScreenState extends State<MedicineScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      CheckboxListTile(
-                        title: const Text('Morning'),
-                        value: _morningChecked,
-                        onChanged: (value) {
-                          setState(() {
-                            _morningChecked = value ?? false;
-                          });
-                        },
-                        activeColor: Colors.blue,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: CheckboxListTile(
+                              title: const Text('Morning', style: TextStyle(fontSize: 13)),
+                              value: _morningChecked,
+                              onChanged: (value) {
+                                setState(() {
+                                  _morningChecked = value ?? false;
+                                });
+                              },
+                              activeColor: Colors.blue,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              dense: true,
+                            ),
+                          ),
+                          Expanded(
+                            child: CheckboxListTile(
+                              title: const Text('Afternoon', style: TextStyle(fontSize: 13)),
+                              value: _afternoonChecked,
+                              onChanged: (value) {
+                                setState(() {
+                                  _afternoonChecked = value ?? false;
+                                });
+                              },
+                              activeColor: Colors.blue,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              dense: true,
+                            ),
+                          ),
+                        ],
                       ),
-                      CheckboxListTile(
-                        title: const Text('Afternoon'),
-                        value: _afternoonChecked,
-                        onChanged: (value) {
-                          setState(() {
-                            _afternoonChecked = value ?? false;
-                          });
-                        },
-                        activeColor: Colors.blue,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-                      CheckboxListTile(
-                        title: const Text('Evening'),
-                        value: _eveningChecked,
-                        onChanged: (value) {
-                          setState(() {
-                            _eveningChecked = value ?? false;
-                          });
-                        },
-                        activeColor: Colors.blue,
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: CheckboxListTile(
+                              title: const Text('Evening', style: TextStyle(fontSize: 13)),
+                              value: _eveningChecked,
+                              onChanged: (value) {
+                                setState(() {
+                                  _eveningChecked = value ?? false;
+                                });
+                              },
+                              activeColor: Colors.blue,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              dense: true,
+                            ),
+                          ),
+                          Expanded(
+                            child: CheckboxListTile(
+                              title: const Text('Night', style: TextStyle(fontSize: 13)),
+                              value: _nightChecked,
+                              onChanged: (value) {
+                                setState(() {
+                                  _nightChecked = value ?? false;
+                                });
+                              },
+                              activeColor: Colors.blue,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              dense: true,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -515,29 +550,39 @@ class _MedicineScreenState extends State<MedicineScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      RadioListTile<String>(
-                        title: const Text('Before Meal'),
-                        value: 'Before',
-                        groupValue: _mealTiming,
-                        onChanged: (value) {
-                          setState(() {
-                            _mealTiming = value ?? 'Before';
-                          });
-                        },
-                        activeColor: Colors.blue,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      RadioListTile<String>(
-                        title: const Text('After Meal'),
-                        value: 'After',
-                        groupValue: _mealTiming,
-                        onChanged: (value) {
-                          setState(() {
-                            _mealTiming = value ?? 'After';
-                          });
-                        },
-                        activeColor: Colors.blue,
-                        contentPadding: EdgeInsets.zero,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('Before Meal', style: TextStyle(fontSize: 13)),
+                              value: 'Before',
+                              groupValue: _mealTiming,
+                              onChanged: (value) {
+                                setState(() {
+                                  _mealTiming = value ?? 'Before';
+                                });
+                              },
+                              activeColor: Colors.blue,
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('After Meal', style: TextStyle(fontSize: 13)),
+                              value: 'After',
+                              groupValue: _mealTiming,
+                              onChanged: (value) {
+                                setState(() {
+                                  _mealTiming = value ?? 'After';
+                                });
+                              },
+                              activeColor: Colors.blue,
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -565,7 +610,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                       Icon(Icons.add, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'Add Medicine',
+                        'Add Prescription',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
