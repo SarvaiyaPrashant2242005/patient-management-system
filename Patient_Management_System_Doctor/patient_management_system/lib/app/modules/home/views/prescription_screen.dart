@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:patient_management_system/app/data/providers/payment_provider.dart';
+import 'package:patient_management_system/app/modules/home/views/payment_screen.dart';
 import 'dart:convert';
 
 class PrescriptionScreen extends StatefulWidget {
@@ -37,106 +40,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     return maxDays * charges;
   }
 
-  void _handlePayment() {
-    // Store the page context BEFORE opening the dialog
-    final pageContext = context;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: const Text(
-            'Payment',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.payment, size: 60, color: Colors.blue),
-              const SizedBox(height: 16),
-              Text(
-                '₹${_calculateTotalAmount().toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Confirm payment?',
-                style: TextStyle(color: Colors.black87),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              style: TextButton.styleFrom(foregroundColor: Colors.black87),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  // Save prescription data first
-                  await _savePrescription();
-                  print('Prescription saved successfully');
-
-                  // Close the payment dialog using dialog context
-                  Navigator.pop(dialogContext);
-
-                  // Show success message using page context
-                  ScaffoldMessenger.of(pageContext).showSnackBar(
-                    const SnackBar(
-                      content: Text('Payment processed & Prescription saved!'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
-
-                  // Allow SnackBar to be seen briefly before navigating
-                  await Future.delayed(const Duration(milliseconds: 500));
-
-                  // Navigate back using page context
-                  print('Starting navigation from prescription page...');
-
-                  // Pop 4 times: prescription -> medicine -> checkup -> patient -> back to clinic
-                  Navigator.of(pageContext).pop(); // Pop prescription
-                  Navigator.of(pageContext).pop(); // Pop medicine
-                  Navigator.of(pageContext).pop(); // Pop checkup
-                  Navigator.of(pageContext).pop(); // Pop patient
-
-                  print('Navigation completed - should be at ClinicPage now');
-
-                } catch (e) {
-                  print('Error in payment: $e');
-                  if (Navigator.canPop(dialogContext)) {
-                    Navigator.pop(dialogContext);
-                  }
-                  ScaffoldMessenger.of(pageContext).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Confirm Payment'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   String _generatePrescriptionText() {
     final buffer = StringBuffer();
@@ -182,15 +85,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
       buffer.writeln('');
     }
 
-    // Bill Summary
-    final maxDays = _getMaxDays();
-    final totalAmount = _calculateTotalAmount();
-    buffer.writeln('───────────────────────────────────');
-    buffer.writeln('BILL SUMMARY:');
-    buffer.writeln('Consultation Charges: ₹${widget.clinicCharges}');
-    buffer.writeln('Treatment Days: $maxDays days');
-    buffer.writeln('Total Amount: ₹${totalAmount.toStringAsFixed(2)}');
-    buffer.writeln('═══════════════════════════════════');
 
     return buffer.toString();
   }
@@ -492,108 +386,49 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
 
             const SizedBox(height: 16),
 
-            // Bill Summary Card
-            Card(
-              color: Colors.white,
-              elevation: 3,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.blue.shade200, width: 2),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Bill Summary',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
-                    ),
-                    const Divider(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Consultation Charges:',
-                          style: TextStyle(fontSize: 15, color: Colors.black87),
-                        ),
-                        Text(
-                          '₹${widget.clinicCharges}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Treatment Days:',
-                          style: TextStyle(fontSize: 15, color: Colors.black87),
-                        ),
-                        Text(
-                          '$maxDays days',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Total Amount:',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
-                        ),
-                        Text(
-                          '₹${totalAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Calculation: $maxDays days × ₹${widget.clinicCharges}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
 
             // Payment Button
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: _handlePayment,
+                onPressed: () async {
+                  try {
+                    await _savePrescription();
+                  } catch (_) {}
+
+                  final patient = {
+                    'name': widget.checkupData['patientName'] ?? 'Patient',
+                    'mobile': widget.checkupData['patientMobile'] ?? '',
+                    'age': widget.checkupData['patientAge'] ?? '',
+                    'gender': widget.checkupData['patientGender'] ?? '',
+                  };
+
+                  String doctorName = 'Doctor';
+                  try {
+                    final prefs = await SharedPreferences.getInstance();
+                    doctorName = prefs.getString('userName') ?? doctorName;
+                  } catch (_) {}
+
+                  final double currentCharges = _calculateTotalAmount();
+
+                  if (!context.mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChangeNotifierProvider(
+                        create: (_) => PaymentProvider(),
+                        child: PatientPaymentPage(
+                          patient: patient,
+                          doctorName: doctorName,
+                          currentCharges: currentCharges,
+                        ),
+                      ),
+                    ),
+                  );
+                },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -602,12 +437,12 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.payment, size: 24),
-                    const SizedBox(width: 12),
+                  children: const [
+                    Icon(Icons.payment, size: 24),
+                    SizedBox(width: 12),
                     Text(
-                      'Proceed to Payment - ₹${totalAmount.toStringAsFixed(2)}',
-                      style: const TextStyle(
+                      'Processed to payment',
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),

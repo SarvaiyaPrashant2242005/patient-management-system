@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'checkup_screen.dart';
+import 'payment_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:patient_management_system/app/data/providers/payment_provider.dart';
 
 class PatientScreenPage extends StatelessWidget {
   final Map<String, dynamic> patientData;
@@ -74,9 +77,8 @@ class PatientScreenPage extends StatelessWidget {
                   Icons.medical_services_outlined,
                   Colors.blue,
                   onTap: () {
+                    if (!_ensureValidNameOrNotify(context)) return;
                     final charges = clinicData['charges'] ?? '500';
-                    print('Clinic Charges being passed: $charges');
-                    print('Full Clinic Data: $clinicData');
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -94,9 +96,42 @@ class PatientScreenPage extends StatelessWidget {
                   "Payment",
                   Icons.payment_outlined,
                   Colors.green,
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Payment clicked")),
+                  onTap: () async {
+                    if (!_ensureValidNameOrNotify(context)) return;
+                    final mobile = patient['mobile'] ?? '';
+                    double currentCharges = 0;
+                    try {
+                      final prefs = await SharedPreferences.getInstance();
+                      final raw = prefs.getString('prescriptions_$mobile');
+                      if (raw != null) {
+                        final List<dynamic> decoded = json.decode(raw);
+                        if (decoded.isNotEmpty) {
+                          final latest = Map<String, dynamic>.from(decoded.first);
+                          final amt = double.tryParse((latest['totalAmount'] ?? '0').toString());
+                          if (amt != null) currentCharges = amt;
+                        }
+                      }
+                    } catch (_) {}
+
+                    String doctorName = 'Doctor';
+                    try {
+                      final prefs = await SharedPreferences.getInstance();
+                      doctorName = prefs.getString('userName') ?? doctorName;
+                    } catch (_) {}
+
+                    if (!context.mounted) return;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ChangeNotifierProvider(
+                          create: (_) => PaymentProvider(),
+                          child: PatientPaymentPage(
+                            patient: patientData,
+                            doctorName: doctorName,
+                            currentCharges: currentCharges,
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -106,6 +141,7 @@ class PatientScreenPage extends StatelessWidget {
                   Icons.science_outlined,
                   Colors.orange,
                   onTap: () {
+                    if (!_ensureValidNameOrNotify(context)) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text("Lab Test clicked")),
                     );
@@ -115,36 +151,84 @@ class PatientScreenPage extends StatelessWidget {
             ),
             const SizedBox(height: 30),
 
-            // Prescription History Button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _showPrescriptionHistory(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            // Prescription History Inline
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: const [
+                  Icon(Icons.history, color: Colors.blue),
+                  SizedBox(width: 8),
+                  Text(
+                    'Prescription History',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  elevation: 2,
-                ),
-                icon: const Icon(Icons.history, size: 24),
-                label: const Text(
-                  'View Prescription History',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                ],
               ),
+            ),
+            const SizedBox(height: 12),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadPrescriptions(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(),
+                  ));
+                }
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text('Failed to load prescriptions', style: TextStyle(color: Colors.red[700])),
+                  );
+                }
+                final prescriptions = snapshot.data ?? [];
+                if (prescriptions.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.folder_open, size: 48, color: Colors.grey),
+                        const SizedBox(height: 8),
+                        Text('No prescription history found', style: TextStyle(color: Colors.grey[700])),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: prescriptions.length,
+                  itemBuilder: (context, index) {
+                    return _buildPrescriptionCard(prescriptions[index], context);
+                  },
+                );
+              },
             ),
           ],
         ),
       ),
     );
+  }
+
+  bool _isValidName(String name) {
+    final reg = RegExp(r'^[A-Za-z .]+ ?');
+    final basic = RegExp(r'^[A-Za-z .]+$');
+    return name.isNotEmpty && basic.hasMatch(name) && RegExp(r'[A-Za-z]').hasMatch(name);
+  }
+
+  bool _ensureValidNameOrNotify(BuildContext context) {
+    final name = (patientData['name'] ?? '').toString();
+    if (_isValidName(name)) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Invalid patient name. Only letters, spaces, and dots allowed.')),
+    );
+    return false;
   }
 
   Widget _buildDetailRow(String title, String value) {
@@ -182,99 +266,25 @@ class PatientScreenPage extends StatelessWidget {
     );
   }
 
-  Future<void> _showPrescriptionHistory(BuildContext context) async {
+  Future<List<Map<String, dynamic>>> _loadPrescriptions() async {
     // Load prescription history from storage
     final prefs = await SharedPreferences.getInstance();
     final patientMobile = patientData['mobile'] ?? '';
     final key = 'prescriptions_$patientMobile';
-    
+
     List<Map<String, dynamic>> prescriptions = [];
     final existingData = prefs.getString(key);
-    
+
     if (existingData != null) {
       try {
         final List<dynamic> decoded = json.decode(existingData);
         prescriptions = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
       } catch (e) {
-        print('Error loading prescriptions: $e');
+        // ignore parse errors, return empty
       }
     }
-    
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          title: Row(
-            children: [
-              const Icon(Icons.history, color: Colors.blueAccent),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Prescription History',
-                  style: TextStyle(color: Colors.black, fontSize: 18),
-                ),
-              ),
-            ],
-          ),
-          content: Container(
-            width: double.maxFinite,
-            constraints: const BoxConstraints(maxHeight: 500),
-            child: prescriptions.isEmpty
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.folder_open,
-                        size: 60,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No prescription history found',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Patient: ${patientData['name']}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Prescription history will be stored here after completing checkups.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[500],
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: prescriptions.length,
-                    itemBuilder: (context, index) {
-                      final prescription = prescriptions[index];
-                      return _buildPrescriptionCard(prescription, context);
-                    },
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
+
+    return prescriptions;
   }
 
   Widget _buildPrescriptionCard(Map<String, dynamic> prescription, BuildContext context) {
@@ -291,13 +301,8 @@ class PatientScreenPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: Colors.blueAccent.shade100),
       ),
-      child: InkWell(
-        onTap: () {
-          _showPrescriptionDetails(prescription, context);
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -356,7 +361,6 @@ class PatientScreenPage extends StatelessWidget {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -386,7 +390,7 @@ class PatientScreenPage extends StatelessWidget {
     );
   }
 
-  void _showPrescriptionDetails(Map<String, dynamic> prescription, BuildContext context) {
+  void _unused_showPrescriptionDetails(Map<String, dynamic> prescription, BuildContext context) {
     final medicines = prescription['medicines'] as List<dynamic>? ?? [];
     
     showDialog(
