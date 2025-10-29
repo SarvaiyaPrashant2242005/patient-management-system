@@ -6,7 +6,7 @@ const prescriptionController = {
     // 🟢 Create Prescription
     createPrescription: async (req, res) => {
         try {
-            const { patient_id, date, dieases, symptoms, payment_mode } = req.body;
+            const { patient_id, date, dieases, symptoms, payment_mode, payment_amount } = req.body;
 
             // Validate patient existence
             const patient = await Patient.findByPk(patient_id);
@@ -19,7 +19,8 @@ const prescriptionController = {
                 date,
                 dieases,
                 symptoms,
-                payment_mode
+                payment_mode,
+                payment_amount
             });
 
             res.status(201).json({
@@ -141,6 +142,12 @@ const prescriptionController = {
             const formatted = prescriptions.map(p => ({
                 id: p.id,
                 disease: p.dieases,
+                date: p.date,
+                symptoms: p.symptoms,
+                payment_mode: p.payment_mode,
+                payment_amount: p.payment_amount,
+                createdAt: p.createdAt,
+                updatedAt: p.updatedAt,
                 doses: (p.doses || []).map(d => ({
                     id: d.id,
                     medicine_name: d.medicine_name,
@@ -164,14 +171,14 @@ const prescriptionController = {
     updatePrescription: async (req, res) => {
         try {
             const { id } = req.params;
-            const { date, dieases, symptoms, payment_mode } = req.body;
+            const { date, dieases, symptoms, payment_mode, payment_amount } = req.body;
 
             const prescription = await Prescription.findByPk(id);
             if (!prescription) {
                 return res.status(404).json({ message: "Prescription not found" });
             }
 
-            await prescription.update({ date, dieases, symptoms, payment_mode });
+            await prescription.update({ date, dieases, symptoms, payment_mode, payment_amount });
 
             res.status(200).json({
                 message: "Prescription updated successfully",

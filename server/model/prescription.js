@@ -33,8 +33,12 @@ const Prescription = sequelize.define('Prescription' , {
         allowNull : false
     },
     payment_mode : {
-        type : DataTypes.ENUM('case' , 'online'),
+        type : DataTypes.ENUM('cash' , 'online'),
         allowNull : false
+    },
+    payment_amount : {
+        type : DataTypes.DECIMAL(10, 2),
+        allowNull : true
     }
 },{
     tableName : 'prescription',
