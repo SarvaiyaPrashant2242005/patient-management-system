@@ -24,10 +24,10 @@ class _CheckupScreenState extends State<CheckupScreen> {
   final _symptomsController = TextEditingController();
   final _diseaseController = TextEditingController();
   late DateTime _selectedDateTime;
-  
+
   // List to store selected symptoms
   final List<String> _selectedSymptoms = [];
-  
+
   // Common symptoms list for typeahead
   final List<String> _commonSymptoms = [
     'Fever',
@@ -109,7 +109,8 @@ class _CheckupScreenState extends State<CheckupScreen> {
   }
 
   void _addSymptom(String symptom) {
-    if (symptom.trim().isNotEmpty && !_selectedSymptoms.contains(symptom.trim())) {
+    if (symptom.trim().isNotEmpty &&
+        !_selectedSymptoms.contains(symptom.trim())) {
       setState(() {
         _selectedSymptoms.add(symptom.trim());
       });
@@ -124,44 +125,46 @@ class _CheckupScreenState extends State<CheckupScreen> {
   }
 
   // Add this to your CheckupScreen where you handle the "Next" button
-// Update the _handleNext method or wherever you're saving the checkup
+  // Update the _handleNext method or wherever you're saving the checkup
 
-void _handleNext() {
-  if (_selectedSymptoms.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Please add at least one symptom'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-    return;
+  void _handleNext() {
+    if (_selectedSymptoms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one symptom'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_formKey.currentState!.validate()) {
+      final checkupData = {
+        'patientId':
+            widget.patientData['id'], // Make sure to include patient ID
+        'patientName': widget.patientData['name'],
+        'patientMobile': widget.patientData['mobile'],
+        'patientAge': widget.patientData['age'],
+        'patientGender': widget.patientData['gender'],
+        'dateTime': _selectedDateTime.toIso8601String(),
+        'symptoms': _selectedSymptoms.join(', '),
+        'disease': _diseaseController.text.trim(),
+        'clinicName': widget.clinicName,
+        'clinicCharges': widget.clinicCharges,
+      };
+
+      print('Checkup Data with Patient ID: $checkupData');
+
+      // Navigate to Medicine Screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MedicineScreen(checkupData: checkupData),
+        ),
+      );
+    }
   }
-  
-  if (_formKey.currentState!.validate()) {
-    final checkupData = {
-      'patientId': widget.patientData['id'], // Make sure to include patient ID
-      'patientName': widget.patientData['name'],
-      'patientMobile': widget.patientData['mobile'],
-      'patientAge': widget.patientData['age'],
-      'patientGender': widget.patientData['gender'],
-      'dateTime': _selectedDateTime.toIso8601String(),
-      'symptoms': _selectedSymptoms.join(', '),
-      'disease': _diseaseController.text.trim(),
-      'clinicName': widget.clinicName,
-      'clinicCharges': widget.clinicCharges,
-    };
 
-    print('Checkup Data with Patient ID: $checkupData');
-
-    // Navigate to Medicine Screen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MedicineScreen(checkupData: checkupData),
-      ),
-    );
-  }
-}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -220,7 +223,7 @@ void _handleNext() {
                             child: _buildInfoRow(
                               Icons.cake_outlined,
                               'Age',
-                              widget.patientData['age'] ?? 'N/A',
+                              widget.patientData['age']?.toString() ?? 'N/A',
                             ),
                           ),
                           Expanded(
@@ -366,7 +369,10 @@ void _handleNext() {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.blue, width: 2),
+                        borderSide: const BorderSide(
+                          color: Colors.blue,
+                          width: 2,
+                        ),
                       ),
                       filled: true,
                       fillColor: Colors.white,
@@ -383,13 +389,20 @@ void _handleNext() {
                   if (pattern.isEmpty) return _commonSymptoms;
                   // Filter symptoms based on user input
                   return _commonSymptoms
-                      .where((symptom) =>
-                          symptom.toLowerCase().contains(pattern.toLowerCase()))
+                      .where(
+                        (symptom) => symptom.toLowerCase().contains(
+                          pattern.toLowerCase(),
+                        ),
+                      )
                       .toList();
                 },
                 itemBuilder: (context, suggestion) {
                   return ListTile(
-                    leading: const Icon(Icons.medical_services, color: Colors.blue, size: 20),
+                    leading: const Icon(
+                      Icons.medical_services,
+                      color: Colors.blue,
+                      size: 20,
+                    ),
                     title: Text(suggestion),
                     dense: true,
                   );
@@ -404,13 +417,11 @@ void _handleNext() {
                     child: child,
                   );
                 },
-                constraints: const BoxConstraints(
-                  maxHeight: 300,
-                ),
+                constraints: const BoxConstraints(maxHeight: 300),
                 offset: const Offset(0, 4),
               ),
               const SizedBox(height: 12),
-              
+
               // Display selected symptoms as chips
               if (_selectedSymptoms.isNotEmpty)
                 Container(
