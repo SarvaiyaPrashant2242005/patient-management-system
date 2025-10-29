@@ -20,6 +20,8 @@ class _PatientFormPageState extends State<PatientFormPage> {
   final _nameController = TextEditingController();
   final _mobileController = TextEditingController();
   final _dobController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _addressController = TextEditingController();
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
 
@@ -37,7 +39,7 @@ class _PatientFormPageState extends State<PatientFormPage> {
       _patientId = widget.patient!['id']?.toString();
       _nameController.text = widget.patient!['name'] ?? '';
       _mobileController.text = widget.patient!['contact'] ?? '';
-      
+
       // Handle DOB from backend (might be in ISO format)
       final dobStr = widget.patient!['dob'] ?? '';
       if (dobStr.isNotEmpty) {
@@ -55,8 +57,10 @@ class _PatientFormPageState extends State<PatientFormPage> {
           }
         }
       }
-      
+
       _gender = widget.patient!['gender'];
+      _ageController.text = widget.patient!['age']?.toString() ?? '';
+      _addressController.text = widget.patient!['address']?.toString() ?? '';
       _heightController.text = widget.patient!['height']?.toString() ?? '';
       _weightController.text = widget.patient!['weight']?.toString() ?? '';
     }
@@ -67,9 +71,22 @@ class _PatientFormPageState extends State<PatientFormPage> {
     _nameController.dispose();
     _mobileController.dispose();
     _dobController.dispose();
+    _ageController.dispose();
+    _addressController.dispose();
     _heightController.dispose();
     _weightController.dispose();
     super.dispose();
+  }
+
+  // Calculate age from DOB
+  int _calculateAge(DateTime dob) {
+    final now = DateTime.now();
+    int age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
   }
 
   // Show date picker for DOB
@@ -84,6 +101,8 @@ class _PatientFormPageState extends State<PatientFormPage> {
       setState(() {
         _selectedDob = picked;
         _dobController.text = DateFormat('dd-MM-yyyy').format(picked);
+        // Auto-calculate and set age
+        _ageController.text = _calculateAge(picked).toString();
       });
     }
   }
@@ -91,8 +110,11 @@ class _PatientFormPageState extends State<PatientFormPage> {
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final patientProvider = Provider.of<PatientProvider>(context, listen: false);
-    
+    final patientProvider = Provider.of<PatientProvider>(
+      context,
+      listen: false,
+    );
+
     // Convert DOB to ISO format for backend (YYYY-MM-DD)
     String dobForBackend = '';
     if (_selectedDob != null) {
@@ -104,12 +126,18 @@ class _PatientFormPageState extends State<PatientFormPage> {
       'name': _nameController.text.trim(),
       'contact': _mobileController.text.trim(),
       'dob': dobForBackend,
+      'age': _ageController.text.trim().isEmpty
+          ? null
+          : int.tryParse(_ageController.text.trim()),
       'gender': _gender ?? '',
-      'height': _heightController.text.trim().isEmpty 
-          ? null 
+      'address': _addressController.text.trim().isEmpty
+          ? null
+          : _addressController.text.trim(),
+      'height': _heightController.text.trim().isEmpty
+          ? null
           : _heightController.text.trim(),
-      'weight': _weightController.text.trim().isEmpty 
-          ? null 
+      'weight': _weightController.text.trim().isEmpty
+          ? null
           : _weightController.text.trim(),
       'photo': null, // Can be added later for image upload
     };
@@ -146,7 +174,8 @@ class _PatientFormPageState extends State<PatientFormPage> {
         ),
       );
     } else {
-      final errorMsg = patientProvider.errorMessage ?? 
+      final errorMsg =
+          patientProvider.errorMessage ??
           'Failed to save patient. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -165,218 +194,294 @@ class _PatientFormPageState extends State<PatientFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(15.0),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.patient != null
-                  ? 'Update Patient Details'
-                  : 'Add New Patient',
-              style: const TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.patient != null
-                  ? 'Edit the patient information below'
-                  : 'Fill in the patient information below',
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 25),
-
-            // Name
-            _buildLabel("Full Name", isRequired: true),
-            const SizedBox(height: 5),
-            TextFormField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.words,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z ]')),
-              ],
-              decoration: _buildInputDecoration(
-                hintText: 'Enter patient name',
-                prefixIcon: Icons.person_outline,
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'Name is required';
-                }
-                if (!RegExp(r'^[a-zA-Z ]+$').hasMatch(v.trim())) {
-                  return 'Only alphabets and spaces allowed';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 10),
-
-            // Mobile
-            _buildLabel("Mobile Number", isRequired: true),
-            const SizedBox(height: 5),
-            TextFormField(
-              controller: _mobileController,
-              keyboardType: TextInputType.phone,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(10),
-              ],
-              decoration: _buildInputDecoration(
-                hintText: 'Enter mobile number',
-                prefixIcon: Icons.phone_android_outlined,
-              ),
-              validator: (v) {
-                if (v == null || v.isEmpty) {
-                  return 'Mobile number is required';
-                }
-                if (v.length != 10) return 'Enter a valid 10-digit number';
-                return null;
-              },
-            ),
-            const SizedBox(height: 10),
-
-            // DOB
-            _buildLabel("Date of Birth", isRequired: true),
-            const SizedBox(height: 5),
-            TextFormField(
-              controller: _dobController,
-              readOnly: true,
-              onTap: _selectDob,
-              decoration: _buildInputDecoration(
-                hintText: 'DD-MM-YYYY',
-                prefixIcon: Icons.cake_outlined,
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return 'DOB is required';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 10),
-
-            // Gender
-            _buildLabel("Gender", isRequired: true),
-            const SizedBox(height: 5),
-            DropdownButtonFormField<String>(
-              value: _gender,
-              decoration: _buildInputDecoration(
-                hintText: 'Select gender',
-                prefixIcon: Icons.wc_outlined,
-              ),
-              items: ['Male', 'Female', 'Other']
-                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                  .toList(),
-              onChanged: (val) => setState(() => _gender = val),
-              validator: (v) => v == null ? 'Please select gender' : null,
-            ),
-            const SizedBox(height: 10),
-
-            // Height and Weight in one row
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 15.0,
+            right: 15.0,
+            top: 15.0,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 15.0,
+          ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLabel("Height (cm)", isRequired: false),
-                      const SizedBox(height: 5),
-                      TextFormField(
-                        controller: _heightController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(4),
-                        ],
-                        decoration: _buildInputDecoration(
-                          hintText: 'Height',
-                          prefixIcon: Icons.height_outlined,
-                        ),
-                        validator: (v) {
-                          if (v != null && v.isNotEmpty) {
-                            final height = int.tryParse(v);
-                            if (height == null || height > 1000) {
-                              return 'Max 1000 cm';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
+                Text(
+                  widget.patient != null
+                      ? 'Update Patient Details'
+                      : 'Add New Patient',
+                  style: const TextStyle(
+                    fontSize: 25,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
                   ),
+                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLabel("Weight (kg)", isRequired: false),
-                      const SizedBox(height: 5),
-                      TextFormField(
-                        controller: _weightController,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(4),
-                        ],
-                        decoration: _buildInputDecoration(
-                          hintText: 'Weight',
-                          prefixIcon: Icons.monitor_weight_outlined,
-                        ),
-                        validator: (v) {
-                          if (v != null && v.isNotEmpty) {
-                            final weight = int.tryParse(v);
-                            if (weight == null || weight > 1000) {
-                              return 'Max 1000 kg';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.patient != null
+                      ? 'Edit the patient information below'
+                      : 'Fill in the patient information below',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  textAlign: TextAlign.center,
                 ),
-              ],
-            ),
-            const SizedBox(height: 25),
+                const SizedBox(height: 25),
 
-            // Submit button
-            SizedBox(
-              height: 50,
-              child: _isSubmitting
-                  ? const AppLoader(size: 40)
-                  : ElevatedButton(
-                      onPressed: _submitForm,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        widget.patient != null
-                            ? 'Update Patient'
-                            : 'Add Patient',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                // Name
+                _buildLabel("Full Name", isRequired: true),
+                const SizedBox(height: 5),
+                TextFormField(
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z ]')),
+                  ],
+                  decoration: _buildInputDecoration(
+                    hintText: 'Enter patient name',
+                    prefixIcon: Icons.person_outline,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Name is required';
+                    }
+                    if (!RegExp(r'^[a-zA-Z ]+$').hasMatch(v.trim())) {
+                      return 'Only alphabets and spaces allowed';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // Mobile
+                _buildLabel("Mobile Number", isRequired: true),
+                const SizedBox(height: 5),
+                TextFormField(
+                  controller: _mobileController,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  decoration: _buildInputDecoration(
+                    hintText: 'Enter mobile number',
+                    prefixIcon: Icons.phone_android_outlined,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) {
+                      return 'Mobile number is required';
+                    }
+                    if (v.length != 10) return 'Enter a valid 10-digit number';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // DOB and Age in one row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Date of Birth", isRequired: true),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _dobController,
+                            readOnly: true,
+                            onTap: _selectDob,
+                            decoration: _buildInputDecoration(
+                              hintText: 'DD-MM-YYYY',
+                              prefixIcon: Icons.cake_outlined,
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'DOB is required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Age", isRequired: true),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _ageController,
+                            keyboardType: TextInputType.number,
+                            readOnly: _dobController.text.isNotEmpty,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(3),
+                            ],
+                            decoration: _buildInputDecoration(
+                              hintText: 'Age',
+                              prefixIcon: Icons.calendar_today_outlined,
+                            ),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return 'Age is required';
+                              }
+                              final age = int.tryParse(v);
+                              if (age == null || age < 0 || age > 150) {
+                                return 'Invalid age';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Gender
+                _buildLabel("Gender", isRequired: true),
+                const SizedBox(height: 5),
+                DropdownButtonFormField<String>(
+                  value: _gender,
+                  decoration: _buildInputDecoration(
+                    hintText: 'Select gender',
+                    prefixIcon: Icons.wc_outlined,
+                  ),
+                  items: ['Male', 'Female', 'Other']
+                      .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _gender = val),
+                  validator: (v) => v == null ? 'Please select gender' : null,
+                ),
+                const SizedBox(height: 10),
+
+                // Address
+                _buildLabel("Address", isRequired: false),
+                const SizedBox(height: 5),
+                TextFormField(
+                  controller: _addressController,
+                  textCapitalization: TextCapitalization.words,
+                  maxLines: 3,
+                  maxLength: 500,
+                  decoration: _buildInputDecoration(
+                    hintText: 'Enter patient address',
+                    prefixIcon: Icons.location_on_outlined,
+                  ),
+                  validator: (v) {
+                    if (v != null && v.length > 500) {
+                      return 'Address must not exceed 500 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // Height and Weight in one row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Height (cm)", isRequired: false),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _heightController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(4),
+                            ],
+                            decoration: _buildInputDecoration(
+                              hintText: 'Height',
+                              prefixIcon: Icons.height_outlined,
+                            ),
+                            validator: (v) {
+                              if (v != null && v.isNotEmpty) {
+                                final height = int.tryParse(v);
+                                if (height == null || height > 1000) {
+                                  return 'Max 1000 cm';
+                                }
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel("Weight (kg)", isRequired: false),
+                          const SizedBox(height: 5),
+                          TextFormField(
+                            controller: _weightController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(4),
+                            ],
+                            decoration: _buildInputDecoration(
+                              hintText: 'Weight',
+                              prefixIcon: Icons.monitor_weight_outlined,
+                            ),
+                            validator: (v) {
+                              if (v != null && v.isNotEmpty) {
+                                final weight = int.tryParse(v);
+                                if (weight == null || weight > 1000) {
+                                  return 'Max 1000 kg';
+                                }
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 25),
+
+                // Submit button
+                SizedBox(
+                  height: 50,
+                  child: _isSubmitting
+                      ? const AppLoader(size: 40)
+                      : ElevatedButton(
+                          onPressed: _submitForm,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            widget.patient != null
+                                ? 'Update Patient'
+                                : 'Add Patient',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 15),
+              ],
             ),
-            const SizedBox(height: 15),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
