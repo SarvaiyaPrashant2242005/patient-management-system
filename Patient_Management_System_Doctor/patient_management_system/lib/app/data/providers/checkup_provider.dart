@@ -51,7 +51,10 @@ class CheckupProvider extends ChangeNotifier {
 
   // Add new checkup and save to database
   // Returns newly created prescription ID on success, or null on failure
-  Future<int?> addCheckup(Map<String, dynamic> checkup, {String? patientId}) async {
+  Future<int?> addCheckup(
+    Map<String, dynamic> checkup, {
+    String? patientId,
+  }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -112,19 +115,26 @@ class CheckupProvider extends ChangeNotifier {
   }
 
   // Prepare prescription data according to API schema
-  // Backend expects: { patient_id, date, dieases, symptoms, payment_mode }
+  // Backend expects: { patient_id, date, dieases, symptoms, payment_mode, payment_amount }
   Map<String, dynamic> _preparePrescriptionData(
     Map<String, dynamic> checkup,
     String? patientId,
   ) {
     // Map to backend keys
     final pid = (patientId ?? checkup['patientId'])?.toString();
+    final paymentAmountStr =
+        checkup['paymentAmount']?.toString() ??
+        checkup['totalAmount']?.toString() ??
+        '0';
+    final paymentAmount = double.tryParse(paymentAmountStr);
+
     return {
       'patient_id': pid != null ? int.tryParse(pid) : null,
       'date': checkup['dateTime'] ?? DateTime.now().toIso8601String(),
       'dieases': checkup['disease'] ?? checkup['diagnosis'] ?? '',
       'symptoms': checkup['symptoms'] ?? '',
       'payment_mode': checkup['paymentMode'] ?? 'cash',
+      'payment_amount': paymentAmount,
     };
   }
 
