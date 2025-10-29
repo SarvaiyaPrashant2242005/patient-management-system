@@ -29,9 +29,11 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
     if (widget.clinic != null) {
       _clinicNameController.text = widget.clinic!['name']?.toString() ?? '';
       _landlineController.text = widget.clinic!['landlineNo']?.toString() ?? '';
-      _doctorNameController.text = widget.clinic!['doctorName']?.toString() ?? '';
+      _doctorNameController.text =
+          widget.clinic!['doctorName']?.toString() ?? '';
       _addressController.text = widget.clinic!['address']?.toString() ?? '';
-      _chargesController.text = widget.clinic!['price_per_day']?.toString() ?? '';
+      _chargesController.text =
+          widget.clinic!['price_per_day']?.toString() ?? '';
     }
   }
 
@@ -49,7 +51,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     final clinicProvider = Provider.of<ClinicProvider>(context, listen: false);
-    
+
     // Prepare data matching backend schema
     final clinicData = {
       'name': _clinicNameController.text.trim(),
@@ -64,10 +66,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
     bool success;
     if (widget.clinic != null && widget.clinicId != null) {
       // Update existing clinic
-      success = await clinicProvider.updateClinic(
-        widget.clinicId!,
-        clinicData,
-      );
+      success = await clinicProvider.updateClinic(widget.clinicId!, clinicData);
     } else {
       // Add new clinic
       success = await clinicProvider.addClinic(clinicData);
@@ -195,14 +194,17 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
             ),
             const SizedBox(height: 12),
 
-            _buildLabel("Consultation Charges", true),
+            _buildLabel("Consultation Charges (Max: ₹1000)", true),
             const SizedBox(height: 5),
             TextFormField(
               controller: _chargesController,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ],
               decoration: _buildDecoration(
-                hint: "Enter consultation charges",
+                hint: "Enter consultation charges (Max: 1000)",
                 icon: Icons.currency_rupee_outlined,
               ),
               validator: (v) {
@@ -212,6 +214,9 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
                 final amount = int.tryParse(v.trim());
                 if (amount == null || amount <= 0) {
                   return 'Please enter a valid amount';
+                }
+                if (amount > 1000) {
+                  return 'Charges cannot exceed ₹1000';
                 }
                 return null;
               },
