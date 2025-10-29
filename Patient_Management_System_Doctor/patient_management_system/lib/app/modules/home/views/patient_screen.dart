@@ -140,6 +140,8 @@ class PatientScreenPage extends StatelessWidget {
                             patient: patientData,
                             doctorName: doctorName,
                             currentCharges: currentCharges,
+                            medicines: const <Map<String, dynamic>>[],
+                            checkupData: const <String, dynamic>{},
                           ),
                         ),
                       ),

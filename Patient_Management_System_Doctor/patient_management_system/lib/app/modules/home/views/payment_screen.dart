@@ -10,12 +10,16 @@ class PatientPaymentPage extends StatefulWidget {
   final Map<String, dynamic> patient;
   final String doctorName;
   final double currentCharges; // today's charges (can be 0 if first time)
+  final Map<String, dynamic>? checkupData;
+  final List<Map<String, dynamic>>? medicines;
 
   const PatientPaymentPage({
     super.key,
     required this.patient,
     required this.doctorName,
     this.currentCharges = 0,
+    this.checkupData,
+    this.medicines,
   });
 
   @override
@@ -24,6 +28,7 @@ class PatientPaymentPage extends StatefulWidget {
 
 class _PatientPaymentPageState extends State<PatientPaymentPage> {
   final TextEditingController _payingController = TextEditingController();
+  String _paymentMode = 'cash'; // 'cash' or 'online'
 
   String get _patientId => (widget.patient['mobile'] ?? widget.patient['id'] ?? '').toString();
   String get _patientName => (widget.patient['name'] ?? 'Patient').toString();
@@ -32,11 +37,18 @@ class _PatientPaymentPageState extends State<PatientPaymentPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PaymentProvider>().loadForPatient(
-            patient: widget.patient,
-            doctorName: widget.doctorName,
-            currentCharges: widget.currentCharges,
-          );
+      final provider = context.read<PaymentProvider>();
+      provider.loadForPatient(
+        patient: widget.patient,
+        doctorName: widget.doctorName,
+        currentCharges: widget.currentCharges,
+      );
+      if (widget.checkupData != null && widget.medicines != null) {
+        provider.setPendingPrescriptionData(
+          checkupData: widget.checkupData!,
+          medicines: widget.medicines!,
+        );
+      }
     });
   }
 
@@ -48,7 +60,14 @@ class _PatientPaymentPageState extends State<PatientPaymentPage> {
 
   Future<void> _confirmPayment() async {
     FocusScope.of(context).unfocus();
-    final ok = await context.read<PaymentProvider>().confirmPayment();
+
+    bool ok = false;
+    if (_paymentMode == 'cash') {
+      ok = await context.read<PaymentProvider>().confirmCashPayment();
+    } else {
+      ok = await context.read<PaymentProvider>().confirmPayment(razorpayKey: 'rzp_test_RZEWtaUsNyw9aC');
+    }
+
     if (!mounted) return;
     final now = DateTime.now();
     if (ok) {
@@ -80,7 +99,6 @@ class _PatientPaymentPageState extends State<PatientPaymentPage> {
         ),
       ).then((_) {
         if (!mounted) return;
-        // Pop back to ClinicPage pushed with RouteSettings name '/clinic'
         Navigator.of(context).popUntil((route) => route.settings.name == '/clinic');
       });
       _payingController.text = '';
@@ -156,6 +174,31 @@ class _PatientPaymentPageState extends State<PatientPaymentPage> {
                               children: [
                                 const Text('Pay Now', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
                                 const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: RadioListTile<String>(
+                                        value: 'cash',
+                                        groupValue: _paymentMode,
+                                        onChanged: (v) => setState(() => _paymentMode = v ?? 'cash'),
+                                        title: const Text('Cash', style: TextStyle(fontSize: 13)),
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: true,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: RadioListTile<String>(
+                                        value: 'online',
+                                        groupValue: _paymentMode,
+                                        onChanged: (v) => setState(() => _paymentMode = v ?? 'online'),
+                                        title: const Text('Online', style: TextStyle(fontSize: 13)),
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: true,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _payingController,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -175,14 +218,14 @@ class _PatientPaymentPageState extends State<PatientPaymentPage> {
                                   width: double.infinity,
                                   child: ElevatedButton.icon(
                                     onPressed: pay.amountPayingToday <= 0 ? null : _confirmPayment,
-                                    icon: const Icon(Icons.check_circle_outline),
+                                    icon: Icon(_paymentMode == 'cash' ? Icons.money : Icons.wifi_tethering),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.blue,
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(vertical: 14),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                     ),
-                                    label: const Text('Confirm Payment'),
+                                    label: Text(_paymentMode == 'cash' ? 'Confirm Payment (Cash)' : 'Confirm Payment (Online)'),
                                   ),
                                 ),
                               ],
@@ -193,7 +236,7 @@ class _PatientPaymentPageState extends State<PatientPaymentPage> {
                           // Optional history
                           _sectionCard(
                             child: FutureBuilder<List<Map<String, dynamic>>>(
-                              future: context.read<PaymentProvider>().loadHistory(),
+                              future: _loadHistory(),
                               builder: (context, snap) {
                                 final items = snap.data ?? [];
                                 return Column(
