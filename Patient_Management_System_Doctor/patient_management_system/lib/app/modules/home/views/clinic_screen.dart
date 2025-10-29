@@ -270,11 +270,10 @@ class _ClinicPageState extends State<ClinicPage> {
   Widget _buildPatientCard(Map<String, dynamic> patient) {
     final patientId = patient['id']?.toString() ?? '';
     final name = patient['name']?.toString() ?? 'Unknown';
-    final contact = patient['contact']?.toString() ?? 'N/A';
     final gender = patient['gender']?.toString() ?? 'N/A';
     final dob = patient['dob']?.toString() ?? 'N/A';
-    final height = patient['height']?.toString() ?? 'N/A';
-    final weight = patient['weight']?.toString() ?? 'N/A';
+    final age = patient['age']?.toString() ?? 'N/A';
+    final address = patient['address']?.toString() ?? 'N/A';
 
     // Format DOB if it's in ISO format
     String formattedDob = dob;
@@ -349,28 +348,26 @@ class _ClinicPageState extends State<ClinicPage> {
               ),
               const SizedBox(height: 10),
 
-              // Contact
-              _buildInfoRow(Icons.phone, contact),
-              const SizedBox(height: 6),
-
-              // DOB
-              _buildInfoRow(Icons.cake, 'DOB: $formattedDob'),
-              const SizedBox(height: 6),
-
-              // Height & Weight
+              // DOB and Age
               Row(
                 children: [
                   Expanded(
-                    child: _buildInfoRow(Icons.height, 'Height: $height cm'),
+                    child: _buildInfoRow(Icons.cake, 'DOB: $formattedDob'),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildInfoRow(
-                      Icons.monitor_weight,
-                      'Weight: $weight kg',
-                    ),
+                    child: _buildInfoRow(Icons.calendar_today, 'Age: $age'),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+
+              // Address
+              _buildInfoRow(
+                Icons.location_on,
+                address.length > 50
+                    ? '${address.substring(0, 50)}...'
+                    : address,
               ),
               const SizedBox(height: 10),
 
