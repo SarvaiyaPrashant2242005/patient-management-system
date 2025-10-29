@@ -66,7 +66,7 @@ class _HomePageState extends State<HomePage> {
                   context,
                   listen: false,
                 );
-                
+
                 // Clear clinic data on logout
                 clinicProvider.clearClinics();
                 await authProvider.logOutUser();
@@ -128,7 +128,8 @@ class _HomePageState extends State<HomePage> {
                       content: Text(
                         success
                             ? 'Clinic deleted successfully'
-                            : clinicProvider.errorMessage ?? 'Failed to delete clinic',
+                            : clinicProvider.errorMessage ??
+                                  'Failed to delete clinic',
                         textAlign: TextAlign.center,
                       ),
                       backgroundColor: success ? Colors.green : Colors.red,
@@ -207,36 +208,51 @@ class _HomePageState extends State<HomePage> {
           drawer: Drawer(
             child: Column(
               children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
-                  decoration: const BoxDecoration(color: Colors.blue),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 40, color: Colors.blue),
+                InkWell(
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DoctorProfileScreen(),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        userName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
+                    decoration: const BoxDecoration(color: Colors.blue),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Colors.white,
+                          child: Icon(
+                            Icons.person,
+                            size: 40,
+                            color: Colors.blue,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        userEmail,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
+                        const SizedBox(height: 10),
+                        Text(
+                          userName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          userEmail,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 Expanded(
@@ -273,7 +289,9 @@ class _HomePageState extends State<HomePage> {
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder :(context) => const DoctorProfileScreen())
+                            MaterialPageRoute(
+                              builder: (context) => const DoctorProfileScreen(),
+                            ),
                           );
                         },
                       ),
@@ -328,7 +346,10 @@ class _HomePageState extends State<HomePage> {
                         child: Text(
                           clinicProvider.errorMessage!,
                           textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -358,9 +379,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.all(16),
                   itemCount: clinicProvider.clinics.length,
                   itemBuilder: (context, index) {
-                    return _buildClinicCard(
-                      clinicProvider.clinics[index],
-                    );
+                    return _buildClinicCard(clinicProvider.clinics[index]);
                   },
                 ),
               );
@@ -419,7 +438,9 @@ class _HomePageState extends State<HomePage> {
           context,
           MaterialPageRoute(
             settings: const RouteSettings(name: '/clinic'),
-builder: (context) => ClinicPage(clinicData: clinic, clinicId: clinicId,),          ),
+            builder: (context) =>
+                ClinicPage(clinicData: clinic, clinicId: clinicId),
+          ),
         );
       },
       borderRadius: BorderRadius.circular(12),
