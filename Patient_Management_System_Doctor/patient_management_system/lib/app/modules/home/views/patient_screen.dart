@@ -60,7 +60,10 @@ class PatientScreenPage extends StatelessWidget {
                     const SizedBox(height: 10),
                     _buildDetailRow("👤 Name", patient['name'] ?? 'N/A'),
                     _buildDetailRow("📞 Mobile", patient['contact'] ?? 'N/A'),
-                    _buildDetailRow("🎂 Age", patient['age'] ?? 'N/A'),
+                    _buildDetailRow(
+                      "🎂 Age",
+                      patient['age']?.toString() ?? 'N/A',
+                    ),
                     _buildDetailRow("⚧ Gender", patient['gender'] ?? 'N/A'),
                   ],
                 ),
@@ -79,7 +82,10 @@ class PatientScreenPage extends StatelessWidget {
                   Colors.blue,
                   onTap: () {
                     if (!_ensureValidNameOrNotify(context)) return;
-                    final charges = clinicData['charges'] ?? '500';
+                    final charges =
+                        clinicData['price_per_day'] ??
+                        clinicData['charges'] ??
+                        '500';
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -107,8 +113,12 @@ class PatientScreenPage extends StatelessWidget {
                       if (raw != null) {
                         final List<dynamic> decoded = json.decode(raw);
                         if (decoded.isNotEmpty) {
-                          final latest = Map<String, dynamic>.from(decoded.first);
-                          final amt = double.tryParse((latest['totalAmount'] ?? '0').toString());
+                          final latest = Map<String, dynamic>.from(
+                            decoded.first,
+                          );
+                          final amt = double.tryParse(
+                            (latest['totalAmount'] ?? '0').toString(),
+                          );
                           if (amt != null) currentCharges = amt;
                         }
                       }
@@ -183,16 +193,29 @@ class PatientScreenPage extends StatelessWidget {
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
-                        Icon(Icons.error_outline, color: Colors.red[700], size: 48),
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red[700],
+                          size: 48,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Failed to load prescriptions',
-                          style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Colors.red[700],
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          snapshot.error.toString().replaceAll('Exception: ', ''),
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                          snapshot.error.toString().replaceAll(
+                            'Exception: ',
+                            '',
+                          ),
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -211,9 +234,16 @@ class PatientScreenPage extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        const Icon(Icons.folder_open, size: 48, color: Colors.grey),
+                        const Icon(
+                          Icons.folder_open,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(height: 8),
-                        Text('No prescription history found', style: TextStyle(color: Colors.grey[700])),
+                        Text(
+                          'No prescription history found',
+                          style: TextStyle(color: Colors.grey[700]),
+                        ),
                       ],
                     ),
                   );
@@ -224,8 +254,8 @@ class PatientScreenPage extends StatelessWidget {
                   itemCount: prescriptions.length,
                   itemBuilder: (context, index) {
                     return _buildPrescriptionCard(
-                      prescriptions[index], 
-                      context, 
+                      prescriptions[index],
+                      context,
                       index + 1, // Pass the sequential number (1-based)
                     );
                   },
@@ -266,9 +296,11 @@ class PatientScreenPage extends StatelessWidget {
 
       // Parse response
       List<Map<String, dynamic>> prescriptions = [];
-      
+
       if (response is List) {
-        prescriptions = response.map((item) => Map<String, dynamic>.from(item)).toList();
+        prescriptions = response
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
       } else if (response is Map && response['prescriptions'] is List) {
         prescriptions = (response['prescriptions'] as List)
             .map((item) => Map<String, dynamic>.from(item))
@@ -334,10 +366,7 @@ class PatientScreenPage extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.black54,
-              ),
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
           ),
         ],
@@ -379,34 +408,50 @@ class PatientScreenPage extends StatelessWidget {
   }
 
   Widget _buildPrescriptionCard(
-    Map<String, dynamic> prescription, 
-    BuildContext context, 
+    Map<String, dynamic> prescription,
+    BuildContext context,
     int sequentialNumber, // Add sequential number parameter
   ) {
     // Debug: Print the prescription data to see what fields are available
     print('Prescription data: $prescription');
-    
+
     // Try multiple possible date field names
-    final date = prescription['date'] ?? 
-                 prescription['createdAt'] ?? 
-                 prescription['created_at'] ??
-                 prescription['updatedAt'] ??
-                 prescription['updated_at'] ??
-                 null;
-    
-    final disease = prescription['disease'] ?? 
-                    prescription['diseases'] ?? 
-                    'N/A';
-    
-    final medicines = (prescription['doses'] as List?) ?? 
-                     (prescription['medicines'] as List?) ?? 
-                     [];
-    
-    final amount = prescription['totalAmount'] ?? 
-                   prescription['total_amount'] ??
-                   prescription['amount'] ?? 
-                   '0';
-    
+    final date =
+        prescription['date'] ??
+        prescription['createdAt'] ??
+        prescription['created_at'] ??
+        prescription['updatedAt'] ??
+        prescription['updated_at'] ??
+        null;
+
+    final disease =
+        prescription['disease'] ?? prescription['diseases'] ?? 'N/A';
+
+    final medicines =
+        (prescription['doses'] as List?) ??
+        (prescription['medicines'] as List?) ??
+        [];
+
+    final amount =
+        prescription['totalAmount'] ??
+        prescription['total_amount'] ??
+        prescription['amount'] ??
+        '0';
+
+    final paymentAmount =
+        prescription['paymentAmount'] ??
+        prescription['payment_amount'] ??
+        amount;
+
+    // Debug: Print payment amount
+    print(
+      'Prescription payment_amount from DB: ${prescription['payment_amount']}',
+    );
+    print(
+      'Prescription paymentAmount from DB: ${prescription['paymentAmount']}',
+    );
+    print('Final paymentAmount used: $paymentAmount');
+
     String formattedDate;
     if (date != null) {
       try {
@@ -424,9 +469,8 @@ class PatientScreenPage extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      color: Colors.grey[100],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
         leading: Container(
           padding: const EdgeInsets.all(8),
@@ -438,10 +482,7 @@ class PatientScreenPage extends StatelessWidget {
         ),
         title: Text(
           formattedDate,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,7 +496,7 @@ class PatientScreenPage extends StatelessWidget {
               ),
             ),
             Text(
-              '${medicines.length} medicine(s) • ₹$amount',
+              '${medicines.length} medicine(s) • ₹$paymentAmount',
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
             ),
           ],
@@ -467,8 +508,14 @@ class PatientScreenPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ...medicines.map((med) {
-                  final medMap = med is Map ? Map<String, dynamic>.from(med) : <String, dynamic>{};
-                  final name = medMap['medicine_name'] ?? medMap['name'] ?? medMap['medicineName'] ?? 'Unknown';
+                  final medMap = med is Map
+                      ? Map<String, dynamic>.from(med)
+                      : <String, dynamic>{};
+                  final name =
+                      medMap['medicine_name'] ??
+                      medMap['name'] ??
+                      medMap['medicineName'] ??
+                      'Unknown';
                   final days = medMap['days']?.toString() ?? '';
                   final quantity = medMap['quantity']?.toString() ?? '';
                   final timeOfDay = medMap['time_of_day']?.toString() ?? '';
@@ -527,14 +574,11 @@ class PatientScreenPage extends StatelessWidget {
                 }).toList(),
                 const Divider(height: 24),
                 const Text(
-                  'Total Amount:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  'Payment Amount:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 Text(
-                  '₹$amount',
+                  '₹$paymentAmount',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
