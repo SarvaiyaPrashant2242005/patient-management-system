@@ -6,13 +6,21 @@ const patientController = {
   // Create a new patient
   createPatient: async (req, res) => {
     try {
-      const { name, gender, contact, dob, height, weight, photo, doctorId, clinicId } = req.body;
+      const { name, gender, contact, dob, age, address, height, weight, photo, doctorId, clinicId } = req.body;
 
       // Validate required fields
       if (!name || !gender || !contact || !dob || !doctorId || !clinicId) {
         return res.status(400).json({
           success: false,
           message: "Name, gender, contact, dob, doctorId, and clinicId are required"
+        });
+      }
+
+      // Validate address length if provided
+      if (address && address.length > 500) {
+        return res.status(400).json({
+          success: false,
+          message: "Address must not exceed 500 characters"
         });
       }
 
@@ -33,6 +41,8 @@ const patientController = {
         gender,
         contact,
         dob,
+        age,
+        address: address || null,
         height,
         weight,
         photo,
@@ -174,7 +184,15 @@ const patientController = {
   updatePatient: async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, gender, contact, dob, height, weight, photo } = req.body;
+      const { name, gender, contact, dob, age, address, height, weight, photo } = req.body;
+
+      // Validate address length if provided
+      if (address && address.length > 500) {
+        return res.status(400).json({
+          success: false,
+          message: "Address must not exceed 500 characters"
+        });
+      }
 
       const patient = await Patient.findByPk(id);
 
@@ -191,6 +209,8 @@ const patientController = {
         gender: gender || patient.gender,
         contact: contact !== undefined ? contact : patient.contact,
         dob: dob || patient.dob,
+        age: age !== undefined ? age : patient.age,
+        address: address !== undefined ? address : patient.address,
         height: height !== undefined ? height : patient.height,
         weight: weight !== undefined ? weight : patient.weight,
         photo: photo !== undefined ? photo : patient.photo

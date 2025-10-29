@@ -27,6 +27,14 @@ const Patient = sequelize.define('Patient' , {
         type : DataTypes.DATE,
         allowNull : false
     },
+    age : {
+        type : DataTypes.INTEGER,
+        allowNull : false
+    },
+    address : {
+        type : DataTypes.TEXT,
+        allowNull : true
+    },
     height : {
         type : DataTypes.DECIMAL,
         allowNull : true
