@@ -5,10 +5,10 @@ import '../../../data/providers/clinic_provider.dart';
 import '../../../shared/widgets/loader.dart';
 
 class ClinicFormPage extends StatefulWidget {
-  final Map<String, String>? clinic; // For editing
-  final int? clinicIndex; // Index for updating
+  final Map<String, dynamic>? clinic; // Changed from String to dynamic
+  final String? clinicId; // Changed from index to clinic ID
 
-  const ClinicFormPage({super.key, this.clinic, this.clinicIndex});
+  const ClinicFormPage({super.key, this.clinic, this.clinicId});
 
   @override
   State<ClinicFormPage> createState() => _ClinicFormPageState();
@@ -27,11 +27,11 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
   void initState() {
     super.initState();
     if (widget.clinic != null) {
-      _clinicNameController.text = widget.clinic!['name'] ?? '';
-      _landlineController.text = widget.clinic!['landline'] ?? '';
-      _doctorNameController.text = widget.clinic!['doctorName'] ?? '';
-      _addressController.text = widget.clinic!['address'] ?? '';
-      _chargesController.text = widget.clinic!['charges'] ?? '';
+      _clinicNameController.text = widget.clinic!['name']?.toString() ?? '';
+      _landlineController.text = widget.clinic!['landlineNo']?.toString() ?? '';
+      _doctorNameController.text = widget.clinic!['doctorName']?.toString() ?? '';
+      _addressController.text = widget.clinic!['address']?.toString() ?? '';
+      _chargesController.text = widget.clinic!['price_per_day']?.toString() ?? '';
     }
   }
 
@@ -49,21 +49,23 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
     if (!_formKey.currentState!.validate()) return;
 
     final clinicProvider = Provider.of<ClinicProvider>(context, listen: false);
+    
+    // Prepare data matching backend schema
     final clinicData = {
       'name': _clinicNameController.text.trim(),
-      'landline': _landlineController.text.trim(),
+      'landlineNo': _landlineController.text.trim(),
       'doctorName': _doctorNameController.text.trim(),
       'address': _addressController.text.trim(),
-      'charges': _chargesController.text.trim(),
+      'price_per_day': int.parse(_chargesController.text.trim()),
     };
 
     setState(() => _isSubmitting = true);
 
     bool success;
-    if (widget.clinic != null && widget.clinicIndex != null) {
+    if (widget.clinic != null && widget.clinicId != null) {
       // Update existing clinic
       success = await clinicProvider.updateClinic(
-        widget.clinicIndex!,
+        widget.clinicId!,
         clinicData,
       );
     } else {
@@ -92,15 +94,15 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
         ),
       );
     } else {
+      final errMsg =
+          clinicProvider.errorMessage ??
+          'Failed to save clinic. Please try again.';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Failed to save clinic. Please try again.',
-            textAlign: TextAlign.center,
-          ),
+        SnackBar(
+          content: Text(errMsg, textAlign: TextAlign.center),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -198,9 +200,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
             TextFormField(
               controller: _chargesController,
               keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-              ],
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: _buildDecoration(
                 hint: "Enter consultation charges",
                 icon: Icons.currency_rupee_outlined,
@@ -286,6 +286,7 @@ class _ClinicFormPageState extends State<ClinicFormPage> {
       filled: true,
       fillColor: Colors.grey[50],
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      errorMaxLines: 2,
     );
   }
 }

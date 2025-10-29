@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:patient_management_system/app/data/providers/auth_provider.dart';
+import 'package:patient_management_system/app/data/providers/clinic_provider.dart';
+import 'package:patient_management_system/app/data/services/api_services.dart';
 import 'package:patient_management_system/app/modules/auth/views/LoginPage.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -19,9 +21,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _degreeController = TextEditingController();
   final _emailController = TextEditingController();
+  final _degreeController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _doctorIdController = TextEditingController();
 
   bool _isEditMode = false;
   bool _isSaving = false;
@@ -53,9 +56,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
   void dispose() {
     _animationController.dispose();
     _nameController.dispose();
-    _degreeController.dispose();
     _emailController.dispose();
+    _degreeController.dispose();
     _phoneController.dispose();
+    _doctorIdController.dispose();
     super.dispose();
   }
 
@@ -63,8 +67,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     _nameController.text = authProvider.userName ?? '';
     _emailController.text = authProvider.userEmail ?? '';
-    _degreeController.text = authProvider.userDegree ?? '';
-    _phoneController.text = authProvider.userPhone ?? '';
+    _degreeController.text = authProvider.degree ?? '';
+    _phoneController.text = authProvider.phoneNo ?? '';
+    _doctorIdController.text = authProvider.doctorId ?? '';
   }
 
   Future<void> _pickImage() async {
@@ -94,38 +99,24 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
   }
 
   Future<void> _loadCounts() async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final email = auth.userEmail;
-    if (email == null) {
-      setState(() {
-        _clinicsCount = 0;
-        _patientsCount = 0;
-      });
-      return;
-    }
-
     try {
-      final prefs = await SharedPreferences.getInstance();
-      // Load clinics
-      final clinicsKey = 'clinics_$email';
-      final clinicsStr = prefs.getString(clinicsKey);
-      List<Map<String, dynamic>> clinics = [];
-      if (clinicsStr != null) {
-        final decoded = json.decode(clinicsStr) as List;
-        clinics = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-      }
-      final clinicsCount = clinics.length;
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final clinicProvider = Provider.of<ClinicProvider>(context, listen: false);
 
-      // Aggregate patients across clinics
+      // Load clinics via API and set count
+      await clinicProvider.loadClinics();
+      final clinicsCount = clinicProvider.clinics.length;
+
+      // Load total patients for this doctor via API endpoint /patient/doctor/:doctorId
       int patientsCount = 0;
-      for (final c in clinics) {
-        final name = (c['name'] ?? '').toString();
-        if (name.isEmpty) continue;
-        final pk = 'patients_${email}_$name';
-        final pj = prefs.getString(pk);
-        if (pj == null) continue;
-        final list = json.decode(pj) as List;
-        patientsCount += list.length;
+      if (auth.doctorId != null) {
+        final response = await ApiService.get(
+          'patient/doctor/${auth.doctorId}',
+          token: auth.token,
+        );
+        if (response is Map && response['success'] == true) {
+          patientsCount = (response['count'] ?? 0) as int;
+        }
       }
 
       if (!mounted) return;
@@ -133,7 +124,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
         _clinicsCount = clinicsCount;
         _patientsCount = patientsCount;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _clinicsCount = 0;
@@ -159,12 +150,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    // Update profile in AuthProvider - now including email
     final success = await authProvider.updateProfile(
-      name: _nameController.text.trim(),
-      email: _emailController.text.trim(), // Add this line
-      degree: _degreeController.text.trim(),
-      phone: _phoneController.text.trim(),
+      fullname: _nameController.text.trim(),
+      degree: _degreeController.text.trim().isEmpty ? null : _degreeController.text.trim(),
+      phoneNo: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
     );
 
     if (mounted) {
@@ -184,6 +173,11 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
           behavior: SnackBarBehavior.floating,
         ),
       );
+
+      if (success) {
+        await authProvider.loadUser();
+        _loadUserData();
+      }
     }
   }
 
@@ -218,7 +212,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
                 );
                 await authProvider.logOutUser();
 
-                if (mounted) {
+                if (context.mounted) {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -265,40 +259,48 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
               ),
             ],
           ),
-          body: LayoutBuilder(
-            builder: (context, constraints) {
-              final isWideScreen = constraints.maxWidth > 600;
-              return SingleChildScrollView(
-                child: Column(
-                  children: [
-                    // Header Section with Avatar
-                    _buildHeaderSection(isWideScreen),
-
-                    // Profile Form Section
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isWideScreen ? 32.0 : 16.0,
-                        vertical: 16.0,
-                      ),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: isWideScreen ? 800 : double.infinity,
-                        ),
-                        child: Column(
-                          children: [
-                            _buildProfileCard(isWideScreen),
-                            const SizedBox(height: 16),
-                            _buildActionButtons(),
-                            const SizedBox(height: 24),
-                            _buildFutureFeatures(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
+          body: RefreshIndicator(
+            onRefresh: () async {
+              await authProvider.loadUser();
+              _loadUserData();
+              await _loadCounts();
             },
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWideScreen = constraints.maxWidth > 600;
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    children: [
+                      // Header Section with Avatar
+                      _buildHeaderSection(isWideScreen),
+
+                      // Profile Form Section
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isWideScreen ? 32.0 : 16.0,
+                          vertical: 16.0,
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: isWideScreen ? 800 : double.infinity,
+                          ),
+                          child: Column(
+                            children: [
+                              _buildProfileCard(isWideScreen),
+                              const SizedBox(height: 16),
+                              _buildActionButtons(),
+                              const SizedBox(height: 24),
+                              _buildQuickStats(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         );
       },
@@ -380,7 +382,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
           const SizedBox(height: 16),
           Text(
             _nameController.text.isNotEmpty
-                ? _nameController.text
+                ? 'Dr. ' + _nameController.text
                 : 'Doctor Name',
             style: const TextStyle(
               fontSize: 24,
@@ -389,9 +391,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
             ),
           ),
           const SizedBox(height: 4),
-          if (_degreeController.text.isNotEmpty)
+          if (_doctorIdController.text.isNotEmpty)
             Text(
-              _degreeController.text,
+              'ID: ${_doctorIdController.text}',
               style: const TextStyle(
                 fontSize: 16,
                 color: Colors.white70,
@@ -455,24 +457,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
               ),
               const SizedBox(height: 20),
 
-              // Degree Field
-              _buildProfileField(
-                label: 'Degree',
-                controller: _degreeController,
-                icon: Icons.school_outlined,
-                isRequired: false,
-                textCapitalization: TextCapitalization.characters,
-              ),
-              const SizedBox(height: 20),
-
-              // Email Field
+              // Email Field (read-only)
               _buildProfileField(
                 label: 'Email',
                 controller: _emailController,
                 icon: Icons.email_outlined,
                 isRequired: true,
                 keyboardType: TextInputType.emailAddress,
-                // Add this parameter
+                isReadOnly: true,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Email is required';
@@ -487,6 +479,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
               ),
               const SizedBox(height: 20),
 
+              // Degree Field
+              _buildProfileField(
+                label: 'Degree',
+                controller: _degreeController,
+                icon: Icons.school_outlined,
+                isRequired: false,
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 20),
+
               // Phone Number Field
               _buildProfileField(
                 label: 'Phone Number',
@@ -495,18 +497,20 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
                 isRequired: false,
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+ -]')),
                 ],
                 validator: (value) {
-                  if (value != null && value.isNotEmpty) {
-                    if (value.length != 10) {
-                      return 'Phone number must be 10 digits';
-                    }
+                  if (value == null || value.trim().isEmpty) return null; // optional
+                  final v = value.replaceAll(' ', '');
+                  if (v.length < 7) {
+                    return 'Enter valid phone number';
                   }
                   return null;
                 },
               ),
+
+              // Doctor ID Field (Read-only)
+              
             ],
           ),
         ),
@@ -523,6 +527,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
     List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
     TextCapitalization? textCapitalization,
+    bool isReadOnly = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -547,17 +552,19 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
-          enabled: _isEditMode,
+          enabled: _isEditMode && !isReadOnly,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           textCapitalization: textCapitalization ?? TextCapitalization.words,
           decoration: InputDecoration(
             prefixIcon: Icon(
               icon,
-              color: _isEditMode ? Colors.blue : Colors.grey,
+              color: (_isEditMode && !isReadOnly) ? Colors.blue : Colors.grey,
             ),
             filled: true,
-            fillColor: _isEditMode ? Colors.teal.shade50 : Colors.grey[100],
+            fillColor: (_isEditMode && !isReadOnly) 
+                ? Colors.teal.shade50 
+                : Colors.grey[100],
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -642,7 +649,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
     );
   }
 
-  Widget _buildFutureFeatures() {
+  Widget _buildQuickStats() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -660,11 +667,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
                 color: Colors.black87,
               ),
             ),
-
             const SizedBox(height: 16),
             Row(
               children: [
-                const SizedBox(width: 12),
                 Expanded(
                   child: _buildStatCard(
                     icon: Icons.people_outline,
@@ -673,7 +678,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen>
                     color: Colors.green,
                   ),
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _buildStatCard(
                     icon: Icons.local_hospital_outlined,

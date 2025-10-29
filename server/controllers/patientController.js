@@ -2,153 +2,251 @@ const Clinic = require('../model/clinic');
 const Doctor = require('../model/doctors');
 const Patient = require('../model/patient');
 
-
 const patientController = {
-    createPatient: async (req, res) => {
-        try {
-            const { name, gender, contact, dob, height, weight, photo, doctorId, clinicId } = req.body;
+  // Create a new patient
+  createPatient: async (req, res) => {
+    try {
+      const { name, gender, contact, dob, height, weight, photo, doctorId, clinicId } = req.body;
 
-            if (!name || !gender || !contact || !dob || !doctorId || !clinicId) {
-                return res.status(400).json({
-                    success: false,
-                    messege: "name, gender, contact , dob , doctor id or clinic id is required"
-                });
-            }
+      // Validate required fields
+      if (!name || !gender || !contact || !dob || !doctorId || !clinicId) {
+        return res.status(400).json({
+          success: false,
+          message: "Name, gender, contact, dob, doctorId, and clinicId are required"
+        });
+      }
 
-            const doctor = await Doctor.findByPk(doctorId);
-            const clinic = await Clinic.findByPk(clinicId);
+      // Validate doctor and clinic exist
+      const doctor = await Doctor.findByPk(doctorId);
+      const clinic = await Clinic.findByPk(clinicId);
 
-            if (!doctor || !clinic) {
-                return res.status(404).json({
-                    success: false,
-                    messege: "DOctor or Clinic not found"
-                })
-            }
+      if (!doctor || !clinic) {
+        return res.status(404).json({
+          success: false,
+          message: "Doctor or Clinic not found"
+        });
+      }
 
-            const patient = await Patient.create({
-                name,
-                gender,
-                contact,
-                dob,
-                height,
-                weight,
-                photo,
-                doctorId,
-                clinicId
-            });
-            res.status(201).json({
-                success: true,
-                messege: 'Patient added Successfully',
-                data: patient
-            });
-        }
-        catch (err) {
-            res.status(500).json({
-                success: false,
-                messege: "Error while creating clinic",
-                error: err.messege
-            })
-        }
-    },
+      // Create patient
+      const patient = await Patient.create({
+        name,
+        gender,
+        contact,
+        dob,
+        height,
+        weight,
+        photo,
+        doctorId,
+        clinicId
+      });
 
-getPatientByclinicId: async (req, res) => {
-  try {
-    const { id } = req.params; // clinicId
-
-    const patients = await Patient.findAll({
-      where: { clinicId: id },
-      include: [{
-        model: Clinic,
-        attributes: ['id', 'name', 'landlineNo', 'doctorName', 'address']
-      }]
-    });
-
-    if (patients.length === 0) {
-      return res.status(404).json({
+      res.status(201).json({
+        success: true,
+        message: 'Patient added successfully',
+        data: patient
+      });
+    } catch (err) {
+      console.error('Error creating patient:', err);
+      res.status(500).json({
         success: false,
-        message: 'No patients found for this clinic'
+        message: "Error while creating patient",
+        error: err.message
       });
     }
+  },
 
-    res.status(200).json({
-      success: true,
-      data: patients
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching patients',
-      error: err.message
-    });
-  }
-},
+  // Get all patients by clinic ID
+  getPatientByclinicId: async (req, res) => {
+    try {
+      const { id } = req.params; // clinicId
 
+      const patients = await Patient.findAll({
+        where: { clinicId: id },
+        include: [
+          {
+            model: Clinic,
+            as: 'clinic',
+            attributes: ['id', 'name', 'landlineNo', 'doctorName', 'address']
+          },
+          {
+            model: Doctor,
+            as: 'doctor',
+            attributes: ['id', 'fullname', 'email', 'degree', 'phoneNo']
+          }
+        ],
+        order: [['createdAt', 'DESC']] // Most recent first
+      });
 
-    updatePatient : async (req,res) => {
-        try {
-            const {id} = req.params;
-            const {name, gender, contact, dob, height, weight,photo} = req.body;
-
-            const patient = await Patient.findByPk(id);
-
-            if(!patient) {
-                return res.status(404).json({
-                    success : false,
-                    messege : "Patient not found"
-                });
-            }
-
-            await patient.update({
-                name : name || patient.name,
-                gender : gender || patient.gender,
-                contact : contact !== undefined ? contact : patient.conatct,
-                dob : dob || patient.dob,
-                height : height || patient.height,
-                weight : weight || patient.weight,
-                photo : photo || patient.photo
-            });
-
-            res.status(200).json({
-                success : true,
-                messege : "Patient updated",
-                data : patient
-            });
-        }
-        catch(err){
-            res.status(500).json({
-                success : false,
-                messege : "Error updating patient",
-                error : err.messege
-            })
-        }
-    },
-    deletePatient : async (req, res) => {
-         try{
-            const {id} = req.body;
-
-            const patient = await Patient.findByPk(id);
-
-            if(!patient) {
-                return res.status(404).json({
-                    success : false,
-                    messege : "Patient not found"
-                })
-            }
-
-            await patient.destroy();
-            res.status|(200).json({
-                success : true,
-                messege  : "Patient Deleted Successfully"
-            })
-         }catch(err){
-            res.status(500).json({
-                success : false,
-                messege : "Error deleting patient",
-                error : err.messege
-            })
-         }
+      res.status(200).json({
+        success: true,
+        count: patients.length,
+        data: patients
+      });
+    } catch (err) {
+      console.error('Error fetching patients:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching patients',
+        error: err.message
+      });
     }
-}
+  },
 
+  // Get single patient by ID
+  getPatientById: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const patient = await Patient.findByPk(id, {
+        include: [
+          {
+            model: Clinic,
+            as: 'clinic',
+            attributes: ['id', 'name', 'landlineNo', 'doctorName', 'address']
+          },
+          {
+            model: Doctor,
+            as: 'doctor',
+            attributes: ['id', 'fullname', 'email', 'degree', 'phoneNo']
+          }
+        ]
+      });
+
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        data: patient
+      });
+    } catch (err) {
+      console.error('Error fetching patient:', err);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching patient",
+        error: err.message
+      });
+    }
+  },
+
+  // Get all patients by doctor ID
+  getPatientsByDoctorId: async (req, res) => {
+    try {
+      const { doctorId } = req.params;
+
+      const patients = await Patient.findAll({
+        where: { doctorId: doctorId },
+        include: [
+          {
+            model: Clinic,
+            as: 'clinic',
+            attributes: ['id', 'name', 'landlineNo', 'doctorName', 'address']
+          },
+          {
+            model: Doctor,
+            as: 'doctor',
+            attributes: ['id', 'fullname', 'email', 'degree', 'phoneNo']
+          }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+
+      res.status(200).json({
+        success: true,
+        count: patients.length,
+        data: patients
+      });
+    } catch (err) {
+      console.error('Error fetching patients:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching patients',
+        error: err.message
+      });
+    }
+  },
+
+  // Update patient
+  updatePatient: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, gender, contact, dob, height, weight, photo } = req.body;
+
+      const patient = await Patient.findByPk(id);
+
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+
+      // Update patient details
+      await patient.update({
+        name: name || patient.name,
+        gender: gender || patient.gender,
+        contact: contact !== undefined ? contact : patient.contact,
+        dob: dob || patient.dob,
+        height: height !== undefined ? height : patient.height,
+        weight: weight !== undefined ? weight : patient.weight,
+        photo: photo !== undefined ? photo : patient.photo
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Patient updated successfully",
+        data: patient
+      });
+    } catch (err) {
+      console.error('Error updating patient:', err);
+      res.status(500).json({
+        success: false,
+        message: "Error updating patient",
+        error: err.message
+      });
+    }
+  },
+
+  // Delete patient
+  deletePatient: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const patient = await Patient.findByPk(id);
+
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+
+      await patient.destroy();
+
+      res.status(200).json({
+        success: true,
+        message: "Patient deleted successfully"
+      });
+    } catch (err) {
+      console.error('Error deleting patient:', err);
+      res.status(500).json({
+        success: false,
+        message: "Error deleting patient",
+        error: err.message
+      });
+    }
+  }
+};
+
+// Define associations
+Doctor.hasMany(Patient, { foreignKey: 'doctorId', as: 'patients' });
+Patient.belongsTo(Doctor, { foreignKey: 'doctorId', as: 'doctor' });
+
+Clinic.hasMany(Patient, { foreignKey: 'clinicId', as: 'patients' });
+Patient.belongsTo(Clinic, { foreignKey: 'clinicId', as: 'clinic' });
 
 module.exports = patientController;

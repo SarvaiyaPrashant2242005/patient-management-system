@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:patient_management_system/app/data/services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MedicineProvider extends ChangeNotifier {
@@ -22,7 +23,6 @@ class MedicineProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Simulate network delay
       await Future.delayed(const Duration(milliseconds: 500));
 
       final prefs = await SharedPreferences.getInstance();
@@ -45,26 +45,58 @@ class MedicineProvider extends ChangeNotifier {
     }
   }
 
-  // Add new medicine
-  Future<bool> addMedicine(Map<String, dynamic> medicine) async {
-    if (_currentCheckupKey == null) return false;
-
+  // Add new medicine to database
+  Future<bool> addMedicine(Map<String, dynamic> medicine, {String? prescriptionId}) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(milliseconds: 300));
+      print('Adding medicine to database...');
+      print('Medicine data: $medicine');
+      print('Prescription ID: $prescriptionId');
 
+      // Get auth token
+      String? token;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        token = prefs.getString('authToken');
+      } catch (_) {}
+
+      // Prepare dose data for API
+      final doseData = _prepareDoseData(medicine, prescriptionId);
+      print('Dose data to send: $doseData');
+
+      // Call API to save dose
+      final response = await ApiService.post(
+        'pdose',
+        doseData,
+        token: token,
+      );
+
+      print('API Response: $response');
+
+      // Extract the ID from response and add to medicine
+      if (response is Map && response['id'] != null) {
+        medicine['id'] = response['id'];
+      } else if (response is Map && response['data'] is Map && response['data']['id'] != null) {
+        medicine['id'] = response['data']['id'];
+      }
+
+      // Add to local list
       _medicines.add(medicine);
-      await _saveMedicines();
+      
+      // Save to SharedPreferences as backup
+      if (_currentCheckupKey != null) {
+        await _saveMedicines();
+      }
 
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Failed to add medicine';
+      print('Error adding medicine: $e');
+      _errorMessage = 'Failed to add medicine: ${e.toString()}';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -72,29 +104,150 @@ class MedicineProvider extends ChangeNotifier {
   }
 
   // Add multiple medicines at once
-  Future<bool> addMultipleMedicines(List<Map<String, dynamic>> medicinesList) async {
-    if (_currentCheckupKey == null) return false;
-
+  Future<bool> addMultipleMedicines(
+    List<Map<String, dynamic>> medicinesList,
+    {String? prescriptionId}
+  ) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(milliseconds: 500));
+      print('Adding multiple medicines to database...');
+      print('Number of medicines: ${medicinesList.length}');
+      print('Prescription ID: $prescriptionId');
 
+      // Get auth token
+      String? token;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        token = prefs.getString('authToken');
+      } catch (_) {}
+
+      // Add each medicine to database
+      for (var medicine in medicinesList) {
+        final doseData = _prepareDoseData(medicine, prescriptionId);
+        print('Adding medicine: ${doseData['medicineName']}');
+
+        try {
+          final response = await ApiService.post(
+            'pdose',
+            doseData,
+            token: token,
+          );
+
+          // Extract the ID from response
+          if (response is Map && response['id'] != null) {
+            medicine['id'] = response['id'];
+          } else if (response is Map && response['data'] is Map && response['data']['id'] != null) {
+            medicine['id'] = response['data']['id'];
+          }
+
+          print('Medicine added successfully: ${medicine['name']}');
+        } catch (e) {
+          print('Error adding medicine ${medicine['name']}: $e');
+          // Continue with other medicines even if one fails
+        }
+      }
+
+      // Add to local list
       _medicines.addAll(medicinesList);
-      await _saveMedicines();
+      
+      // Save to SharedPreferences as backup
+      if (_currentCheckupKey != null) {
+        await _saveMedicines();
+      }
 
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Failed to add medicines';
+      print('Error adding medicines: $e');
+      _errorMessage = 'Failed to add medicines: ${e.toString()}';
       _isLoading = false;
       notifyListeners();
       return false;
     }
+  }
+
+  // Prepare dose data according to backend pDose schema
+  // Backend expects: { pres_id, days, medicine_type, medicine_name, time_of_day, meal_time, quantity }
+  Map<String, dynamic> _prepareDoseData(
+    Map<String, dynamic> medicine,
+    String? prescriptionId,
+  ) {
+    final bool morning = medicine['morning'] == true || medicine['morning'] == 1;
+    final bool afternoon = medicine['afternoon'] == true || medicine['afternoon'] == 1;
+    final bool evening = medicine['evening'] == true || medicine['evening'] == 1;
+    final bool night = medicine['night'] == true || medicine['night'] == 1;
+
+    // Choose a single time_of_day supported by backend enum
+    String timeOfDay;
+    if (morning) {
+      timeOfDay = 'morning';
+    } else if (afternoon) {
+      timeOfDay = 'afternoon';
+    } else if (evening || night) {
+      // backend has no 'night', map to 'evening'
+      timeOfDay = 'evening';
+    } else {
+      timeOfDay = 'morning';
+    }
+
+    // Map UI type to backend enum
+    final String uiType = (medicine['type'] ?? 'Tablet').toString();
+    final String backendType = uiType.toLowerCase() == 'syrup' ? 'syrup' : 'capsule';
+
+    // Days and quantity
+    final int days = int.tryParse('${medicine['days'] ?? '0'}') ?? 0;
+    final String mealTiming = (medicine['mealTiming'] ?? 'Before').toString().toLowerCase();
+
+    // Quantity: for tablets default to 1 piece; for syrup parse ml
+    int quantity;
+    if (backendType == 'syrup') {
+      quantity = int.tryParse('${medicine['quantity'] ?? '5'}') ?? 5;
+    } else {
+      quantity = 1;
+    }
+
+    return {
+      'pres_id': int.tryParse('${prescriptionId ?? medicine['prescriptionId'] ?? ''}') ?? 0,
+      'days': days,
+      'medicine_type': backendType,
+      'medicine_name': medicine['name']?.toString() ?? '',
+      'time_of_day': timeOfDay,
+      'meal_time': mealTiming == 'after' ? 'after' : 'before',
+      'quantity': quantity,
+    };
+  }
+
+  // Build instructions string from medicine data
+  String _buildInstructions(Map<String, dynamic> medicine) {
+    List<String> instructions = [];
+    
+    if (medicine['type'] == 'Syrup' && medicine['quantity'] != null) {
+      instructions.add('Take ${medicine['quantity']}ml');
+    }
+    
+    List<String> timings = [];
+    if (medicine['morning'] == true) timings.add('morning');
+    if (medicine['afternoon'] == true) timings.add('afternoon');
+    if (medicine['evening'] == true) timings.add('evening');
+    if (medicine['night'] == true) timings.add('night');
+    
+    if (timings.isNotEmpty) {
+      instructions.add('Take in ${timings.join(', ')}');
+    }
+    
+    if (medicine['mealTiming'] != null) {
+      instructions.add('${medicine['mealTiming']} meal');
+    }
+    
+    if (medicine['days'] != null) {
+      instructions.add('Continue for ${medicine['days']} days');
+    }
+    
+    return instructions.join('. ');
   }
 
   // Update medicine
@@ -108,7 +261,6 @@ class MedicineProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Simulate network delay
       await Future.delayed(const Duration(milliseconds: 300));
 
       _medicines[index] = medicine;
@@ -125,9 +277,9 @@ class MedicineProvider extends ChangeNotifier {
     }
   }
 
-  // Delete medicine
+  // Delete medicine from database
   Future<bool> deleteMedicine(int index) async {
-    if (_currentCheckupKey == null || index < 0 || index >= _medicines.length) {
+    if (index < 0 || index >= _medicines.length) {
       return false;
     }
 
@@ -136,17 +288,45 @@ class MedicineProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(milliseconds: 300));
+      final medicine = _medicines[index];
+      final medicineId = medicine['id'];
+      
+      print('Deleting medicine from database...');
+      print('Medicine ID: $medicineId');
+      print('Medicine: ${medicine['name']}');
 
+      // Only call API if medicine has an ID (was saved to database)
+      if (medicineId != null) {
+        // Get auth token
+        String? token;
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          token = prefs.getString('authToken');
+        } catch (_) {}
+
+        // Call API to delete dose
+        final response = await ApiService.delete(
+          'pdose/$medicineId',
+          token: token,
+        );
+
+        print('Delete API Response: $response');
+      }
+
+      // Remove from local list
       _medicines.removeAt(index);
-      await _saveMedicines();
+      
+      // Update SharedPreferences
+      if (_currentCheckupKey != null) {
+        await _saveMedicines();
+      }
 
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Failed to delete medicine';
+      print('Error deleting medicine: $e');
+      _errorMessage = 'Failed to delete medicine: ${e.toString()}';
       _isLoading = false;
       notifyListeners();
       return false;

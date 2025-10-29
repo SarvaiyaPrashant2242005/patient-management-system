@@ -123,40 +123,45 @@ class _CheckupScreenState extends State<CheckupScreen> {
     });
   }
 
-  void _handleNext() {
-    if (_selectedSymptoms.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one symptom'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-    
-    if (_formKey.currentState!.validate()) {
-      final checkupData = {
-        'patientName': widget.patientData['name'],
-        'patientMobile': widget.patientData['mobile'],
-        'patientAge': widget.patientData['age'],
-        'patientGender': widget.patientData['gender'],
-        'dateTime': _selectedDateTime.toIso8601String(),
-        'symptoms': _selectedSymptoms.join(', '),
-        'disease': _diseaseController.text.trim(),
-        'clinicName': widget.clinicName,
-        'clinicCharges': widget.clinicCharges,
-      };
+  // Add this to your CheckupScreen where you handle the "Next" button
+// Update the _handleNext method or wherever you're saving the checkup
 
-      // Navigate to Medicine Screen
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MedicineScreen(checkupData: checkupData),
-        ),
-      );
-    }
+void _handleNext() {
+  if (_selectedSymptoms.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Please add at least one symptom'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+    return;
   }
+  
+  if (_formKey.currentState!.validate()) {
+    final checkupData = {
+      'patientId': widget.patientData['id'], // Make sure to include patient ID
+      'patientName': widget.patientData['name'],
+      'patientMobile': widget.patientData['mobile'],
+      'patientAge': widget.patientData['age'],
+      'patientGender': widget.patientData['gender'],
+      'dateTime': _selectedDateTime.toIso8601String(),
+      'symptoms': _selectedSymptoms.join(', '),
+      'disease': _diseaseController.text.trim(),
+      'clinicName': widget.clinicName,
+      'clinicCharges': widget.clinicCharges,
+    };
 
+    print('Checkup Data with Patient ID: $checkupData');
+
+    // Navigate to Medicine Screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MedicineScreen(checkupData: checkupData),
+      ),
+    );
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -206,7 +211,7 @@ class _CheckupScreenState extends State<CheckupScreen> {
                       _buildInfoRow(
                         Icons.phone_outlined,
                         'Mobile',
-                        widget.patientData['mobile'] ?? 'N/A',
+                        widget.patientData['contact'] ?? 'N/A',
                       ),
                       const SizedBox(height: 8),
                       Row(

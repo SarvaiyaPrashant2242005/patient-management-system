@@ -44,7 +44,7 @@ class _SignUpPageState extends State<SignUpPage> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
         degree: _degreeController.text.trim(),
-        phone: _phoneController.text.trim(),
+        phoneNo: _phoneController.text.trim(),
       );
 
       if (mounted) {

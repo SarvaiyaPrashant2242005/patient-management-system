@@ -34,6 +34,6 @@ class MyApp extends StatelessWidget {
         home: const SplashPage(),
         debugShowCheckedModeBanner: false,
       ),
-    );
+    ); 
   }
 }

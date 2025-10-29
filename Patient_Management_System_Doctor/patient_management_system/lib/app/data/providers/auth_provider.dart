@@ -1,32 +1,31 @@
 import 'package:flutter/foundation.dart';
+import 'package:patient_management_system/app/data/services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const String demoEmail = 'demo@medtrack.com';
   static const String demoPassword = 'demo123';
   static const String demoName = 'Dr. Rajesh Kumar';
-  
+
   bool _isLoading = false;
   String? _errorMessage;
   String? _userEmail;
   String? _userName;
-  String? _userDegree;
-  String? _userPhone;
   bool _isLoggedIn = false;
+  String? _token;
+  String? _doctorId;
+  String? _degree;
+  String? _phoneNo;
 
   bool get isLoading => _isLoading;
-
   String? get errorMessage => _errorMessage;
-
   String? get userEmail => _userEmail;
-
   String? get userName => _userName;
-
-  String? get userDegree => _userDegree;
-
-  String? get userPhone => _userPhone;
-
   bool get isLoggedIn => _isLoggedIn;
+  String? get token => _token;
+  String? get doctorId => _doctorId;
+  String? get degree => _degree;
+  String? get phoneNo => _phoneNo;
 
   // Set loader
   void setLoading(bool value) {
@@ -39,16 +38,13 @@ class AuthProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-      
-      if (isLoggedIn) {
-        _userEmail = prefs.getString('email');
-        _userName = prefs.getString('userName');
-        _userDegree = prefs.getString('degree');
-        _userPhone = prefs.getString('phone');
-        _isLoggedIn = _userEmail != null && _userName != null;
-      } else {
-        _isLoggedIn = false;
-      }
+      _token = prefs.getString('token');
+      _userEmail = prefs.getString('email');
+      _userName = prefs.getString('userName');
+      _doctorId = prefs.getString('doctorId');
+      _degree = prefs.getString('degree');
+      _phoneNo = prefs.getString('phoneNo');
+      _isLoggedIn = isLoggedIn && _token != null;
       notifyListeners();
     } catch (e) {
       _isLoggedIn = false;
@@ -61,50 +57,32 @@ class AuthProvider extends ChangeNotifier {
     String name,
     String email,
     String password, {
-    String? degree,
-    String? phone,
+    String degree = '',
+    String phoneNo = '',
   }) async {
     setLoading(true);
     _errorMessage = null;
-    
+
     try {
-      // Simulate network delay for demo
-      await Future.delayed(const Duration(seconds: 1));
-      
-      final prefs = await SharedPreferences.getInstance();
+      final response = await ApiService.post('doctor/register', {
+        'fullname': name,
+        'email': email,
+        'password': password,
+        'degree': degree,
+        'phoneNo': phoneNo,
+      });
 
-      // Check if user already exists
-      final existingEmail = prefs.getString('email');
-      if (existingEmail != null && existingEmail == email) {
-        _errorMessage = "User with this email already exists";
-        _isLoggedIn = false;
+      if (response != null && response['doctorId'] != null) {
+        // Auto-login after successful registration
+        final loggedIn = await login(email, password);
         setLoading(false);
-        return false;
+        return loggedIn;
       }
-      
-      // Save user data
-      await prefs.setString('userName', name);
-      await prefs.setString('email', email);
-      await prefs.setString('password', password);
-      if (degree != null && degree.isNotEmpty) {
-        await prefs.setString('degree', degree);
-      }
-      if (phone != null && phone.isNotEmpty) {
-        await prefs.setString('phone', phone);
-      }
-      await prefs.setBool('isLoggedIn', true);
-
-      _userEmail = email;
-      _userName = name;
-      _userDegree = degree;
-      _userPhone = phone;
-      _errorMessage = null;
-      _isLoggedIn = true;
-      
+      _errorMessage = 'Registration failed';
       setLoading(false);
-      return true;
+      return false;
     } catch (e) {
-      _errorMessage = "Sign up failed. Please try again.";
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
       _isLoggedIn = false;
       setLoading(false);
       return false;
@@ -117,57 +95,91 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      // Simulate network delay for demo
-      await Future.delayed(const Duration(seconds: 1));
-      
-      final prefs = await SharedPreferences.getInstance();
-      
-      // Check demo credentials first
-      if (email == demoEmail && password == demoPassword) {
-        await prefs.setString('userName', demoName);
-        await prefs.setString('email', demoEmail);
-        await prefs.setBool('isLoggedIn', true);
-        
-        _userEmail = demoEmail;
-        _userName = demoName;
-        _isLoggedIn = true;
-        _errorMessage = null;
-        
-        setLoading(false);
-        return true;
-      }
-      
-      // Check saved credentials
-      final savedEmail = prefs.getString('email');
-      final savedPassword = prefs.getString('password');
-      final savedName = prefs.getString('userName');
-      final savedDegree = prefs.getString('degree');
-      final savedPhone = prefs.getString('phone');
+      final response = await ApiService.post('doctor/login', {
+        'email': email,
+        'password': password,
+      });
 
-      if (email == savedEmail && password == savedPassword) {
-        await prefs.setBool('isLoggedIn', true);
-        
-        _userEmail = savedEmail;
-        _userName = savedName;
-        _userDegree = savedDegree;
-        _userPhone = savedPhone;
-        _isLoggedIn = true;
-        _errorMessage = null;
-        
-        setLoading(false);
-        return true;
-      } else {
-        _errorMessage = 'Invalid email or password';
-        _isLoggedIn = false;
-        
+      _token = response['token'];
+      final doctor = response['doctor'];
+
+      if (_token == null || doctor == null) {
+        _errorMessage = 'Invalid server response';
         setLoading(false);
         return false;
       }
-    } catch (e) {
-      _errorMessage = 'Login failed. Please try again.';
-      _isLoggedIn = false;
-      
+
+      _userEmail = doctor['email'];
+      _userName = doctor['fullname'];
+      _doctorId = doctor['_id']?.toString() ?? doctor['id']?.toString();
+      _degree = doctor['degree']?.toString();
+      _phoneNo = doctor['phoneNo']?.toString();
+      _isLoggedIn = true;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', _token!);
+      await prefs.setString('email', _userEmail!);
+      await prefs.setString('userName', _userName!);
+      if (_doctorId != null) {
+        await prefs.setString('doctorId', _doctorId!);
+      }
+      if (_degree != null) {
+        await prefs.setString('degree', _degree!);
+      }
+      if (_phoneNo != null) {
+        await prefs.setString('phoneNo', _phoneNo!);
+      }
+      await prefs.setBool('isLoggedIn', true);
+
       setLoading(false);
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoggedIn = false;
+
+      setLoading(false);
+      return false;
+    }
+  }
+
+  // Update profile data on server and locally
+  Future<bool> updateProfile({String? fullname, String? degree, String? phoneNo}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = _token ?? prefs.getString('token');
+      final id = _doctorId ?? prefs.getString('doctorId');
+
+      if (token == null || id == null) {
+        _errorMessage = 'Not authenticated';
+        notifyListeners();
+        return false;
+      }
+
+      final Map<String, dynamic> payload = {};
+      if (fullname != null) payload['fullname'] = fullname;
+      if (degree != null) payload['degree'] = degree;
+      if (phoneNo != null) payload['phoneNo'] = phoneNo;
+
+      await ApiService.put('doctor/profile/$id', payload, token: token);
+
+      if (fullname != null) {
+        _userName = fullname;
+        await prefs.setString('userName', fullname);
+      }
+      if (degree != null) {
+        _degree = degree;
+        await prefs.setString('degree', degree);
+      }
+      if (phoneNo != null) {
+        _phoneNo = phoneNo;
+        await prefs.setString('phoneNo', phoneNo);
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
       return false;
     }
   }
@@ -175,18 +187,18 @@ class AuthProvider extends ChangeNotifier {
   // Logout Logic...
   Future<void> logOutUser() async {
     setLoading(true);
-    
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', false);
+      await prefs.clear();
 
       _userName = null;
       _userEmail = null;
-      _userDegree = null;
-      _userPhone = null;
       _isLoggedIn = false;
       _errorMessage = null;
-      
+      _token = null;
+      _doctorId = null;
+
       setLoading(false);
       notifyListeners();
     } catch (e) {
@@ -194,57 +206,10 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-  
+
   // Clear error message
   void clearError() {
     _errorMessage = null;
     notifyListeners();
-  }
-
-  // Update profile data
-  Future<bool> updateProfile({
-    String? name,
-    String? email,
-    String? degree,
-    String? phone,
-  }) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      if (name != null) {
-        await prefs.setString('userName', name);
-        _userName = name;
-      }
-      
-      if (email != null) {
-        await prefs.setString('email', email);
-        _userEmail = email;
-      }
-      
-      if (degree != null) {
-        if (degree.isEmpty) {
-          await prefs.remove('degree');
-          _userDegree = null;
-        } else {
-          await prefs.setString('degree', degree);
-          _userDegree = degree;
-        }
-      }
-      
-      if (phone != null) {
-        if (phone.isEmpty) {
-          await prefs.remove('phone');
-          _userPhone = null;
-        } else {
-          await prefs.setString('phone', phone);
-          _userPhone = phone;
-        }
-      }
-      
-      notifyListeners();
-      return true;
-    } catch (e) {
-      return false;
-    }
   }
 }

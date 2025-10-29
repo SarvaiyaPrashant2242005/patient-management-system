@@ -1,10 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:patient_management_system/app/data/providers/auth_provider.dart';
-import 'package:patient_management_system/app/data/providers/clinic_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:patient_management_system/app/data/providers/patient_provider.dart';
+import 'package:patient_management_system/app/data/providers/clinic_provider.dart';
 
 class PatientDetailsPage extends StatefulWidget {
   const PatientDetailsPage({super.key});
@@ -17,81 +16,62 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _patients = [];
+  Map<String, String> _clinicMap = {}; // Map of clinicId -> clinicName
   String _query = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadPatients();
+      _loadData();
     });
   }
 
-  Future<void> _loadPatients() async {
+  Future<void> _loadData() async {
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final clinicsProvider =
-          Provider.of<ClinicProvider>(context, listen: false);
+      final patientProv = Provider.of<PatientProvider>(context, listen: false);
+      final clinicProv = Provider.of<ClinicProvider>(context, listen: false);
 
-      final email = auth.userEmail;
-      if (email == null) {
-        setState(() {
-          _loading = false;
-          _patients = [];
-          _error = 'User not logged in';
-        });
-        return;
-      }
+      // Load both patients and clinics
+      await Future.wait([
+        patientProv.loadPatientsByDoctorId(),
+        clinicProv.loadClinics(),
+      ]);
 
-      // Ensure clinics are loaded
-      if (clinicsProvider.isInitialLoading) {
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-      // If clinics list is empty, try loading from prefs directly
-      List<Map<String, String>> clinics = clinicsProvider.clinics;
-      if (clinics.isEmpty) {
-        final prefs = await SharedPreferences.getInstance();
-        final key = 'clinics_$email';
-        final clinicsJson = prefs.getString(key);
-        if (clinicsJson != null) {
-          final decoded = json.decode(clinicsJson) as List;
-          clinics = decoded.map((e) => Map<String, String>.from(e)).toList();
+      // Create a map of clinicId -> clinicName for quick lookup
+      final clinicMap = <String, String>{};
+      for (var clinic in clinicProv.clinics) {
+        // Try different possible ID fields
+        final id = clinic['id']?.toString() ?? 
+                   clinic['_id']?.toString() ?? 
+                   clinic['clinicId']?.toString();
+        final name = clinic['name']?.toString() ?? 'Unknown Clinic';
+        if (id != null && id.isNotEmpty) {
+          clinicMap[id] = name;
         }
       }
-
-      final prefs = await SharedPreferences.getInstance();
-      final List<Map<String, dynamic>> aggregated = [];
-
-      for (final clinic in clinics) {
-        final clinicName = clinic['name'];
-        if (clinicName == null || clinicName.isEmpty) continue;
-
-        final patientsKey = 'patients_${email}_$clinicName';
-        final patientsJson = prefs.getString(patientsKey);
-        if (patientsJson == null) continue;
-
-        final List<dynamic> decoded = json.decode(patientsJson);
-        for (final item in decoded) {
-          final m = Map<String, dynamic>.from(item as Map);
-          m['clinicName'] = clinicName;
-          aggregated.add(m);
-        }
-      }
+      
+      // Debug: Print clinic map to verify
+      print('Clinic Map: $clinicMap');
+      print('Sample Patient clinicId: ${patientProv.patients.isNotEmpty ? patientProv.patients[0]['clinicId'] : 'No patients'}');
 
       setState(() {
-        _patients = aggregated;
+        _patients = patientProv.patients;
+        _clinicMap = clinicMap;
+        _error = patientProv.errorMessage ?? clinicProv.errorMessage;
         _loading = false;
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to load patients';
+        _error = 'Failed to load data: ${e.toString()}';
         _loading = false;
         _patients = [];
+        _clinicMap = {};
       });
     }
   }
@@ -101,9 +81,10 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     final q = _query.toLowerCase();
     return _patients.where((p) {
       final name = (p['name'] ?? '').toString().toLowerCase();
-      final clinic = (p['clinicName'] ?? '').toString().toLowerCase();
-      final phone = (p['phone'] ?? '').toString().toLowerCase();
-      return name.contains(q) || clinic.contains(q) || phone.contains(q);
+      final clinicId = (p['clinicId'] ?? '').toString();
+      final clinicName = (_clinicMap[clinicId] ?? '').toLowerCase();
+      final phone = (p['contact'] ?? '').toString().toLowerCase();
+      return name.contains(q) || clinicName.contains(q) || phone.contains(q);
     }).toList();
   }
 
@@ -122,7 +103,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         iconTheme: IconThemeData(color: Colors.white),
       ),
       body: RefreshIndicator(
-        onRefresh: _loadPatients,
+        onRefresh: _loadData,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 900;
@@ -175,14 +156,6 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           },
         ),
       ),
-      // floatingActionButton: FloatingActionButton.extended(
-      //   onPressed: () {
-      //     // Placeholder for future add patient flow
-      //   },
-      //   backgroundColor: Colors.blue,
-      //   label: const Text('Add Patient'),
-      //   icon: const Icon(Icons.person_add_alt_1),
-      // ),
     );
   }
 
@@ -191,7 +164,14 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     return ListView.separated(
       itemCount: data.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, i) => _PatientCard(patient: data[i]),
+      itemBuilder: (context, i) {
+        final clinicId = data[i]['clinicId']?.toString() ?? '';
+        final clinicName = _clinicMap[clinicId] ?? 'Unknown Clinic';
+        return _PatientCard(
+          patient: data[i],
+          clinicName: clinicName,
+        );
+      },
     );
   }
 
@@ -205,7 +185,14 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
         childAspectRatio: 1.4,
       ),
       itemCount: data.length,
-      itemBuilder: (context, i) => _PatientCard(patient: data[i]),
+      itemBuilder: (context, i) {
+        final clinicId = data[i]['clinicId']?.toString() ?? '';
+        final clinicName = _clinicMap[clinicId] ?? 'Unknown Clinic';
+        return _PatientCard(
+          patient: data[i],
+          clinicName: clinicName,
+        );
+      },
     );
   }
 
@@ -254,7 +241,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           ),
           const SizedBox(height: 8),
           ElevatedButton(
-            onPressed: _loadPatients,
+            onPressed: _loadData,
             child: const Text('Retry'),
           ),
         ],
@@ -265,15 +252,18 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
 
 class _PatientCard extends StatelessWidget {
   final Map<String, dynamic> patient;
-  const _PatientCard({required this.patient});
+  final String clinicName;
+  
+  const _PatientCard({
+    required this.patient,
+    required this.clinicName,
+  });
 
   @override
   Widget build(BuildContext context) {
     final name = (patient['name'] ?? 'Unknown') as String;
-    final clinicName = (patient['clinicName'] ?? '—') as String;
-    final phone = (patient['phone'] ?? '—') as String;
+    final phone = (patient['contact'] ?? '—') as String;
     final gender = (patient['gender'] ?? '—') as String;
-    final age = (patient['age']?.toString() ?? '—');
     final lastVisit = (patient['lastVisit'] ?? '—') as String;
 
     return Card(
@@ -315,17 +305,16 @@ class _PatientCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.local_hospital_outlined,
-                                size: 16, color: Colors.grey[600]),
-                            const SizedBox(width: 6),
+                            Icon(Icons.business, size: 14, color: Colors.grey[600]),
+                            const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 clinicName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.w500,
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
                                 ),
                               ),
                             ),
@@ -341,7 +330,7 @@ class _PatientCard extends StatelessWidget {
                 children: [
                   _iconText(Icons.event, lastVisit),
                   const SizedBox(width: 12),
-                  _iconText(Icons.person_outline, '$gender, $age'),
+                  _iconText(Icons.person_outline, gender),
                 ],
               ),
               const SizedBox(height: 10),

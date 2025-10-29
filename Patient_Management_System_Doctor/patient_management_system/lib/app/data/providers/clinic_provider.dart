@@ -1,45 +1,59 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_services.dart';
 
 class ClinicProvider extends ChangeNotifier {
-  List<Map<String, String>> _clinics = [];
+  List<Map<String, dynamic>> _clinics = [];
   bool _isLoading = false;
   bool _isInitialLoading = true;
   String? _errorMessage;
-  String? _currentUserEmail;
+  String? _currentDoctorId;
 
-  List<Map<String, String>> get clinics => _clinics;
+  List<Map<String, dynamic>> get clinics => _clinics;
   bool get isLoading => _isLoading;
   bool get isInitialLoading => _isInitialLoading;
   String? get errorMessage => _errorMessage;
 
-  // Load clinics for specific user
-  Future<void> loadClinics(String userEmail) async {
-    _currentUserEmail = userEmail;
+  // Load clinics for specific doctor from backend
+  Future<void> loadClinics() async {
     _isInitialLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(seconds: 1));
-
+      // Get doctor ID from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final key = 'clinics_$userEmail';
-      final clinicsJson = prefs.getString(key);
+      _currentDoctorId = prefs.getString('doctorId');
 
-      if (clinicsJson != null) {
-        final List<dynamic> decoded = json.decode(clinicsJson);
-        _clinics = decoded.map((e) => Map<String, String>.from(e)).toList();
+      if (_currentDoctorId == null) {
+        _errorMessage = 'Doctor ID not found. Please login again.';
+        _isInitialLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      // Get token for authentication
+      final token = prefs.getString('token');
+
+      // Fetch clinics from backend by doctor ID
+      final response = await ApiService.get(
+        'clinics/doctors/$_currentDoctorId',
+        token: token,
+      );
+
+      if (response['success'] == true) {
+        final List<dynamic> clinicsData = response['data'] ?? [];
+        _clinics = clinicsData.map((e) => Map<String, dynamic>.from(e)).toList();
       } else {
+        _errorMessage = response['message'] ?? 'Failed to load clinics';
         _clinics = [];
       }
 
       _isInitialLoading = false;
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to load clinics';
+      _errorMessage = 'Failed to load clinics: ${e.toString()}';
       _isInitialLoading = false;
       _clinics = [];
       notifyListeners();
@@ -47,25 +61,56 @@ class ClinicProvider extends ChangeNotifier {
   }
 
   // Add new clinic
-  Future<bool> addClinic(Map<String, String> clinic) async {
-    if (_currentUserEmail == null) return false;
-
+  Future<bool> addClinic(Map<String, dynamic> clinicData) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(seconds: 1));
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      _currentDoctorId = prefs.getString('doctorId');
 
-      _clinics.add(clinic);
-      await _saveClinics();
+      if (_currentDoctorId == null) {
+        _errorMessage = 'Doctor ID not found';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
 
-      _isLoading = false;
-      notifyListeners();
-      return true;
+      // Add doctor_id to clinic data
+      final dataToSend = {
+        ...clinicData,
+        'doctor_id': _currentDoctorId,
+      };
+
+      final response = await ApiService.post(
+        'clinics',
+        dataToSend,
+        token: token,
+      );
+
+      if (response['success'] == true) {
+        // Add the new clinic to local list
+        _clinics.add(response['data']);
+        
+        // Store clinic ID in SharedPreferences
+        final clinicId = response['data']['id']?.toString();
+        if (clinicId != null) {
+          await prefs.setString('clinicId', clinicId);
+        }
+        
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to add clinic';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
     } catch (e) {
-      _errorMessage = 'Failed to add clinic';
+      _errorMessage = 'Error adding clinic: $e';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -73,27 +118,38 @@ class ClinicProvider extends ChangeNotifier {
   }
 
   // Update clinic
-  Future<bool> updateClinic(int index, Map<String, String> clinic) async {
-    if (_currentUserEmail == null || index < 0 || index >= _clinics.length) {
-      return false;
-    }
-
+  Future<bool> updateClinic(String clinicId, Map<String, dynamic> clinicData) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(seconds: 1));
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
 
-      _clinics[index] = clinic;
-      await _saveClinics();
+      final response = await ApiService.put(
+        'clinics/$clinicId',
+        clinicData,
+        token: token,
+      );
 
-      _isLoading = false;
-      notifyListeners();
-      return true;
+      if (response['success'] == true) {
+        // Update the clinic in local list
+        final index = _clinics.indexWhere((c) => c['id'].toString() == clinicId);
+        if (index != -1) {
+          _clinics[index] = response['data'];
+        }
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to update clinic';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
     } catch (e) {
-      _errorMessage = 'Failed to update clinic';
+      _errorMessage = 'Failed to update clinic: ${e.toString()}';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -101,47 +157,44 @@ class ClinicProvider extends ChangeNotifier {
   }
 
   // Delete clinic
-  Future<bool> deleteClinic(int index) async {
-    if (_currentUserEmail == null || index < 0 || index >= _clinics.length) {
-      return false;
-    }
-
+  Future<bool> deleteClinic(String clinicId) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      // Simulate network delay
-      await Future.delayed(const Duration(milliseconds: 500));
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
 
-      _clinics.removeAt(index);
-      await _saveClinics();
+      final response = await ApiService.delete(
+        'clinics/$clinicId',
+        token: token,
+      );
 
-      _isLoading = false;
-      notifyListeners();
-      return true;
+      if (response['success'] == true) {
+        // Remove the clinic from local list
+        _clinics.removeWhere((c) => c['id'].toString() == clinicId);
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = response['message'] ?? 'Failed to delete clinic';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
     } catch (e) {
-      _errorMessage = 'Failed to delete clinic';
+      _errorMessage = 'Failed to delete clinic: ${e.toString()}';
       _isLoading = false;
       notifyListeners();
       return false;
     }
   }
 
-  // Save clinics to SharedPreferences
-  Future<void> _saveClinics() async {
-    if (_currentUserEmail == null) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final key = 'clinics_$_currentUserEmail';
-    final clinicsJson = json.encode(_clinics);
-    await prefs.setString(key, clinicsJson);
-  }
-
   // Clear clinics (for logout)
   void clearClinics() {
     _clinics = [];
-    _currentUserEmail = null;
+    _currentDoctorId = null;
     _isLoading = false;
     _isInitialLoading = true;
     _errorMessage = null;

@@ -23,15 +23,12 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final clinicProvider = Provider.of<ClinicProvider>(
         context,
         listen: false,
       );
-
-      if (authProvider.userEmail != null) {
-        clinicProvider.loadClinics(authProvider.userEmail!);
-      }
+      // Load clinics from API
+      clinicProvider.loadClinics();
     });
   }
 
@@ -65,6 +62,13 @@ class _HomePageState extends State<HomePage> {
                   context,
                   listen: false,
                 );
+                final clinicProvider = Provider.of<ClinicProvider>(
+                  context,
+                  listen: false,
+                );
+                
+                // Clear clinic data on logout
+                clinicProvider.clearClinics();
                 await authProvider.logOutUser();
 
                 if (mounted) {
@@ -86,7 +90,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _deleteClinic(int index, String clinicName) {
+  void _deleteClinic(String clinicId, String clinicName) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -116,7 +120,7 @@ class _HomePageState extends State<HomePage> {
                   context,
                   listen: false,
                 );
-                final success = await clinicProvider.deleteClinic(index);
+                final success = await clinicProvider.deleteClinic(clinicId);
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -124,9 +128,12 @@ class _HomePageState extends State<HomePage> {
                       content: Text(
                         success
                             ? 'Clinic deleted successfully'
-                            : 'Failed to delete clinic',
+                            : clinicProvider.errorMessage ?? 'Failed to delete clinic',
+                        textAlign: TextAlign.center,
                       ),
                       backgroundColor: success ? Colors.green : Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 }
@@ -144,13 +151,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openAddClinicSheet() async {
-    await showModalBottomSheet(
+    final result = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Colors.white,
       builder: (_) => const ClinicFormPage(),
     );
+
+    // Optionally refresh clinics list after adding
+    if (result == true && mounted) {
+      final clinicProvider = Provider.of<ClinicProvider>(
+        context,
+        listen: false,
+      );
+      clinicProvider.loadClinics();
+    }
   }
 
   @override
@@ -250,11 +266,6 @@ class _HomePageState extends State<HomePage> {
                           );
                         },
                       ),
-                      // ListTile(
-                      //   leading: const Icon(Icons.settings_outlined),
-                      //   title: const Text('Settings'),
-                      //   onTap: () {},
-                      // ),
                       ListTile(
                         leading: const Icon(Icons.person_2_outlined),
                         title: const Text('Profile'),
@@ -262,9 +273,7 @@ class _HomePageState extends State<HomePage> {
                           Navigator.pop(context);
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (context) => const DoctorProfileScreen(),
-                            ),
+                            MaterialPageRoute(builder :(context) => const DoctorProfileScreen())
                           );
                         },
                       ),
@@ -293,18 +302,67 @@ class _HomePageState extends State<HomePage> {
                 return const Center(child: AppLoader(size: 120));
               }
 
+              // Show error message if there's an error
+              if (clinicProvider.errorMessage != null) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 80,
+                        color: Colors.red[300],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error Loading Clinics',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        child: Text(
+                          clinicProvider.errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: () => clinicProvider.loadClinics(),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               // Show empty state if no clinics
               if (clinicProvider.clinics.isEmpty) {
                 return _buildEmptyState();
               }
 
               // Show clinics list
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: clinicProvider.clinics.length,
-                itemBuilder: (context, index) {
-                  return _buildClinicCard(index, clinicProvider.clinics[index]);
-                },
+              return RefreshIndicator(
+                onRefresh: () => clinicProvider.loadClinics(),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: clinicProvider.clinics.length,
+                  itemBuilder: (context, index) {
+                    return _buildClinicCard(
+                      clinicProvider.clinics[index],
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -347,20 +405,21 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildClinicCard(int index, Map<String, String> clinic) {
+  Widget _buildClinicCard(Map<String, dynamic> clinic) {
+    final clinicId = clinic['id']?.toString() ?? '';
+    final clinicName = clinic['name']?.toString() ?? 'Unknown Clinic';
+    final landline = clinic['landlineNo']?.toString() ?? 'N/A';
+    final address = clinic['address']?.toString() ?? 'No address provided';
+    final charges = clinic['price_per_day']?.toString() ?? '0';
+
     return InkWell(
       onTap: () {
-        // This print statement helps confirm the code is running correctly.
-        // Check your debug console for this message when you tap a clinic.
-        print("Navigating to ClinicPage and setting its name to '/clinic'");
-
+        print("Navigating to ClinicPage for clinic: $clinicName");
         Navigator.push(
           context,
           MaterialPageRoute(
-            // This line is crucial for the navigation to work correctly later.
             settings: const RouteSettings(name: '/clinic'),
-            builder: (context) => ClinicPage(clinicData: clinic),
-          ),
+builder: (context) => ClinicPage(clinicData: clinic, clinicId: clinicId,),          ),
         );
       },
       borderRadius: BorderRadius.circular(12),
@@ -376,7 +435,7 @@ class _HomePageState extends State<HomePage> {
             children: [
               // Clinic Name
               Text(
-                clinic['name']!,
+                clinicName,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -392,7 +451,7 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      clinic['landline']!,
+                      landline,
                       style: const TextStyle(
                         fontSize: 15,
                         color: Colors.black87,
@@ -411,7 +470,7 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      clinic['address']!,
+                      address,
                       style: const TextStyle(
                         fontSize: 14,
                         color: Colors.black87,
@@ -448,7 +507,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          clinic['charges'] ?? '0',
+                          charges,
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -464,16 +523,25 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       TextButton.icon(
                         onPressed: () async {
-                          await showModalBottomSheet(
+                          final result = await showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
                             showDragHandle: true,
                             backgroundColor: Colors.white,
                             builder: (_) => ClinicFormPage(
                               clinic: clinic,
-                              clinicIndex: index,
+                              clinicId: clinicId,
                             ),
                           );
+
+                          // Refresh list after update
+                          if (result == true && mounted) {
+                            final clinicProvider = Provider.of<ClinicProvider>(
+                              context,
+                              listen: false,
+                            );
+                            clinicProvider.loadClinics();
+                          }
                         },
                         icon: const Icon(Icons.edit_outlined, size: 18),
                         label: const Text('Edit'),
@@ -483,7 +551,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(width: 5),
                       TextButton.icon(
-                        onPressed: () => _deleteClinic(index, clinic['name']!),
+                        onPressed: () => _deleteClinic(clinicId, clinicName),
                         icon: const Icon(Icons.delete_outline, size: 18),
                         label: const Text('Delete'),
                         style: TextButton.styleFrom(
@@ -498,212 +566,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-// The rest of your file remains unchanged
-class AddClinicSheet extends StatefulWidget {
-  final Future<void> Function() onAdded;
-  final Function(Map<String, String>) onSubmit;
-
-  const AddClinicSheet({
-    super.key,
-    required this.onAdded,
-    required this.onSubmit,
-  });
-
-  @override
-  State<AddClinicSheet> createState() => _AddClinicSheetState();
-}
-
-class _AddClinicSheetState extends State<AddClinicSheet> {
-  final _formKey = GlobalKey<FormState>();
-  final _clinicNameController = TextEditingController();
-  final _landlineController = TextEditingController();
-  final _doctorNameController = TextEditingController();
-  final _addressController = TextEditingController();
-  bool _submitting = false;
-
-  @override
-  void dispose() {
-    _clinicNameController.dispose();
-    _landlineController.dispose();
-    _doctorNameController.dispose();
-    _addressController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _submitting = true);
-
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-    setState(() => _submitting = false);
-
-    // Call onSubmit to add clinic data
-    widget.onSubmit({
-      'name': _clinicNameController.text.trim(),
-      'landline': _landlineController.text.trim(),
-      'doctorName': _doctorNameController.text.trim(),
-      'address': _addressController.text.trim(),
-    });
-
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Clinic added successfully',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        margin: EdgeInsets.only(top: 20, left: 50, right: 50),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(8)),
-        ),
-        elevation: 6,
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    // Call onAdded callback
-    await widget.onAdded();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Add New Clinic',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-
-          // Clinic Name
-          _buildLabel('Clinic Name', isRequired: true),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _clinicNameController,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              hintText: 'Enter clinic name',
-              prefixIcon: Icon(
-                Icons.local_hospital_outlined,
-                color: Colors.blue,
-              ),
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) => (v == null || v.trim().isEmpty)
-                ? 'Clinic name is required'
-                : null,
-          ),
-          const SizedBox(height: 16),
-
-          // Landline Number
-          _buildLabel('Landline Number', isRequired: true),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _landlineController,
-            keyboardType: TextInputType.phone,
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[\d\-\s\(\)]')),
-            ],
-            decoration: const InputDecoration(
-              hintText: 'e.g., 0283-2234567',
-              prefixIcon: Icon(Icons.phone_outlined, color: Colors.blue),
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) {
-                return 'Landline number is required';
-              }
-              final cleaned = v.replaceAll(RegExp(r'[\s\-\(\)]'), '');
-              if (cleaned.length < 10) {
-                return 'Please enter a valid landline number';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Doctor Name
-          _buildLabel('Doctor Name', isRequired: false),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _doctorNameController,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              hintText: 'Enter doctor name (optional)',
-              prefixIcon: Icon(Icons.person_outline, color: Colors.blue),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Address
-          _buildLabel('Address', isRequired: true),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _addressController,
-            textCapitalization: TextCapitalization.words,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Enter complete address',
-              prefixIcon: Icon(Icons.location_on_outlined, color: Colors.blue),
-              border: OutlineInputBorder(),
-            ),
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Address is required' : null,
-          ),
-          const SizedBox(height: 20),
-
-          // Submit Button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: _submitting
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton(
-                    onPressed: _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text(
-                      'Add Clinic',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLabel(String text, {required bool isRequired}) {
-    return Row(
-      children: [
-        Text(
-          text,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        if (isRequired)
-          const Text(' *', style: TextStyle(color: Colors.red, fontSize: 15)),
-      ],
     );
   }
 }

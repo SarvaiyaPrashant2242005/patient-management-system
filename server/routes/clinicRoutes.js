@@ -8,11 +8,11 @@ router.post('/', clinicController.createClinic);
 // Get all clinics
 router.get('/', clinicController.getAllClinics);
 
+// Get clinics by doctor ID (place before '/:id' to avoid shadowing)
+router.get('/doctors/:doctorId', clinicController.getClinicsByDoctorId);
+
 // Get clinic by ID
 router.get('/:id', clinicController.getClinicById);
-
-// Get clinics by doctor ID
-router.get('/doctor/:doctorId', clinicController.getClinicsByDoctorId);
 
 // Update clinic
 router.put('/:id', clinicController.updateClinic);

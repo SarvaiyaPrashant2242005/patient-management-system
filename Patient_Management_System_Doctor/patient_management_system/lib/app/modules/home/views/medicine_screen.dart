@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:patient_management_system/app/data/providers/checkup_provider.dart';
+import 'package:patient_management_system/app/data/providers/medicine_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'prescription_screen.dart';
+
 
 class MedicineScreen extends StatefulWidget {
   final Map<String, dynamic> checkupData;
 
-  const MedicineScreen({
-    super.key,
-    required this.checkupData,
-  });
+  const MedicineScreen({super.key, required this.checkupData});
 
   @override
   State<MedicineScreen> createState() => _MedicineScreenState();
@@ -19,14 +21,14 @@ class _MedicineScreenState extends State<MedicineScreen> {
   final _daysController = TextEditingController();
   final _medicineNameController = TextEditingController();
   final _quantityController = TextEditingController();
-  
+
   String? _selectedMedicineType = 'Tablet';
   bool _morningChecked = false;
   bool _afternoonChecked = false;
   bool _eveningChecked = false;
   bool _nightChecked = false;
   String _mealTiming = 'Before';
-  
+
   // List to store added medicines
   final List<Map<String, dynamic>> _addedMedicines = [];
 
@@ -38,56 +40,61 @@ class _MedicineScreenState extends State<MedicineScreen> {
     super.dispose();
   }
 
-  void _handleAddMedicine() {
-    if (_formKey.currentState!.validate()) {
-      if (!_morningChecked && !_afternoonChecked && !_eveningChecked && !_nightChecked) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please select at least one time'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      final medicineData = {
-        'name': _medicineNameController.text.trim(),
-        'type': _selectedMedicineType,
-        'days': _daysController.text.trim(),
-        'morning': _morningChecked,
-        'afternoon': _afternoonChecked,
-        'evening': _eveningChecked,
-        'night': _nightChecked,
-        'mealTiming': _mealTiming,
-        'quantity': _selectedMedicineType == 'Syrup' ? _quantityController.text.trim() : null,
-      };
-
-      setState(() {
-        _addedMedicines.add(medicineData);
-      });
-
+void _handleAddMedicine() {
+  if (_formKey.currentState!.validate()) {
+    if (!_morningChecked &&
+        !_afternoonChecked &&
+        !_eveningChecked &&
+        !_nightChecked) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Medicine added successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 1),
+          content: Text('Please select at least one time'),
+          backgroundColor: Colors.orange,
         ),
       );
-      
-      // Clear form
-      _medicineNameController.clear();
-      _daysController.clear();
-      _quantityController.clear();
-      setState(() {
-        _selectedMedicineType = 'Tablet';
-        _morningChecked = false;
-        _afternoonChecked = false;
-        _eveningChecked = false;
-        _nightChecked = false;
-        _mealTiming = 'Before';
-      });
+      return;
     }
+
+    final medicineData = {
+      'name': _medicineNameController.text.trim(),
+      'type': _selectedMedicineType,
+      'days': _daysController.text.trim(),
+      'morning': _morningChecked ? 1 : 0, // Convert bool to int (0 or 1)
+      'afternoon': _afternoonChecked ? 1 : 0,
+      'evening': _eveningChecked ? 1 : 0,
+      'night': _nightChecked ? 1 : 0,
+      'mealTiming': _mealTiming,
+      'quantity': _selectedMedicineType == 'Syrup'
+          ? _quantityController.text.trim()
+          : null,
+    };
+
+    setState(() {
+      _addedMedicines.add(medicineData);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Medicine added successfully!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    // Clear form
+    _medicineNameController.clear();
+    _daysController.clear();
+    _quantityController.clear();
+    setState(() {
+      _selectedMedicineType = 'Tablet';
+      _morningChecked = false;
+      _afternoonChecked = false;
+      _eveningChecked = false;
+      _nightChecked = false;
+      _mealTiming = 'Before';
+    });
   }
+}
 
   void _handleRemoveMedicine(int index) {
     setState(() {
@@ -102,7 +109,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
     );
   }
 
-  void _handleFinish() {
+  Future<void> _handleFinish() async {
     if (_addedMedicines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -113,23 +120,166 @@ class _MedicineScreenState extends State<MedicineScreen> {
       return;
     }
 
-    // Get clinic charges from checkup data, default to '500' if not available
-    final clinicCharges = widget.checkupData['clinicCharges'] ?? '500';
-    
-    print('Medicine - Clinic Charges from checkupData: $clinicCharges');
-    print('Medicine - Full checkupData: ${widget.checkupData}');
-
-    // Navigate to Prescription Screen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PrescriptionScreen(
-          checkupData: widget.checkupData,
-          medicines: _addedMedicines,
-          clinicCharges: clinicCharges,
-        ),
-      ),
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Saving prescription...'),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
+
+    try {
+      // Get doctor name
+      final doctorName = await _getDoctorName();
+
+      // First, save the prescription using CheckupProvider
+      final checkupProvider = Provider.of<CheckupProvider>(
+        context,
+        listen: false,
+      );
+
+      // Prepare complete checkup data with medicines
+     // Prepare complete checkup data with medicines
+final completeCheckupData = {
+  'patientId': widget.checkupData['patientId'].toString(), // Convert to String
+  'patientName': widget.checkupData['patientName'],
+  'patientMobile': widget.checkupData['patientMobile'],
+  'patientAge': widget.checkupData['patientAge']?.toString(), // Handle null safely
+  'patientGender': widget.checkupData['patientGender'],
+  'dateTime': widget.checkupData['dateTime'],
+  'symptoms': widget.checkupData['symptoms'],
+  'disease': widget.checkupData['disease'],
+  'diagnosis': widget.checkupData['disease'],
+  'clinicName': widget.checkupData['clinicName'],
+  'clinicCharges': widget.checkupData['clinicCharges'].toString(),
+  'totalAmount': widget.checkupData['clinicCharges'].toString(),
+  'medicines': _addedMedicines,
+  'doctorName': doctorName,
+};
+     print('Debug checkupData types:');
+  print('patientAge type: ${widget.checkupData['patientAge'].runtimeType}');
+  print('clinicCharges type: ${widget.checkupData['clinicCharges'].runtimeType}');
+  print('Complete checkup data: $completeCheckupData');
+  print('Medicines data: $_addedMedicines');
+      print('Saving complete checkup data: $completeCheckupData');
+
+      // Save prescription and get the prescription ID
+     // After getting the prescription ID, store it
+final presId = await checkupProvider.addCheckup(
+  completeCheckupData,
+  patientId: widget.checkupData['patientId'].toString(),
+);
+
+if (presId == null) {
+  if (!mounted) return;
+  Navigator.pop(context); // Close loading dialog
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        checkupProvider.errorMessage ?? 'Failed to save prescription',
+      ),
+      backgroundColor: Colors.red,
+    ),
+  );
+  return;
+}
+
+final String validPrescriptionId = presId.toString();
+print('Prescription saved with ID: $validPrescriptionId');
+
+// Now save individual medicines using MedicineProvider
+final medicineProvider = Provider.of<MedicineProvider>(
+  context,
+  listen: false,
+);
+
+// Use the non-nullable variable
+final medicinesSaved = await medicineProvider.addMultipleMedicines(
+  _addedMedicines,
+  prescriptionId: validPrescriptionId,
+);
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      if (medicinesSaved) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Prescription saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate to Prescription Screen
+        final clinicCharges = widget.checkupData['clinicCharges'] ?? '500';
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PrescriptionScreen(
+              checkupData: widget.checkupData,
+              medicines: _addedMedicines,
+              clinicCharges: clinicCharges,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              medicineProvider.errorMessage ?? 'Failed to save medicines',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        // Still navigate to prescription screen as prescription was saved
+        final clinicCharges = widget.checkupData['clinicCharges'] ?? '500';
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PrescriptionScreen(
+              checkupData: widget.checkupData,
+              medicines: _addedMedicines,
+              clinicCharges: clinicCharges,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error in _handleFinish: $e');
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Helper method to get doctor name
+  Future<String> _getDoctorName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('userName') ?? 'Doctor';
+    } catch (_) {
+      return 'Doctor';
+    }
   }
 
   @override
@@ -203,7 +353,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.blue,
                         borderRadius: BorderRadius.circular(20),
@@ -295,9 +448,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
               TextFormField(
                 controller: _daysController,
                 keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   hintText: 'Enter number of days',
                   prefixIcon: const Icon(
@@ -363,14 +514,8 @@ class _MedicineScreenState extends State<MedicineScreen> {
                   fillColor: Colors.white,
                 ),
                 items: const [
-                  DropdownMenuItem(
-                    value: 'Tablet',
-                    child: Text('Tablet'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Syrup',
-                    child: Text('Syrup'),
-                  ),
+                  DropdownMenuItem(value: 'Tablet', child: Text('Tablet')),
+                  DropdownMenuItem(value: 'Syrup', child: Text('Syrup')),
                 ],
                 onChanged: (value) {
                   setState(() {
@@ -394,9 +539,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                 TextFormField(
                   controller: _quantityController,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
                     hintText: 'Enter quantity in ml (e.g., 5, 10)',
                     prefixIcon: const Icon(
@@ -413,7 +556,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.blue, width: 2),
+                      borderSide: const BorderSide(
+                        color: Colors.blue,
+                        width: 2,
+                      ),
                     ),
                     filled: true,
                     fillColor: Colors.white,
@@ -459,7 +605,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                         children: [
                           Expanded(
                             child: CheckboxListTile(
-                              title: const Text('Morning', style: TextStyle(fontSize: 13)),
+                              title: const Text(
+                                'Morning',
+                                style: TextStyle(fontSize: 13),
+                              ),
                               value: _morningChecked,
                               onChanged: (value) {
                                 setState(() {
@@ -474,7 +623,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                           ),
                           Expanded(
                             child: CheckboxListTile(
-                              title: const Text('Afternoon', style: TextStyle(fontSize: 13)),
+                              title: const Text(
+                                'Afternoon',
+                                style: TextStyle(fontSize: 13),
+                              ),
                               value: _afternoonChecked,
                               onChanged: (value) {
                                 setState(() {
@@ -493,7 +645,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                         children: [
                           Expanded(
                             child: CheckboxListTile(
-                              title: const Text('Evening', style: TextStyle(fontSize: 13)),
+                              title: const Text(
+                                'Evening',
+                                style: TextStyle(fontSize: 13),
+                              ),
                               value: _eveningChecked,
                               onChanged: (value) {
                                 setState(() {
@@ -508,7 +663,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                           ),
                           Expanded(
                             child: CheckboxListTile(
-                              title: const Text('Night', style: TextStyle(fontSize: 13)),
+                              title: const Text(
+                                'Night',
+                                style: TextStyle(fontSize: 13),
+                              ),
                               value: _nightChecked,
                               onChanged: (value) {
                                 setState(() {
@@ -554,7 +712,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                         children: [
                           Expanded(
                             child: RadioListTile<String>(
-                              title: const Text('Before Meal', style: TextStyle(fontSize: 13)),
+                              title: const Text(
+                                'Before Meal',
+                                style: TextStyle(fontSize: 13),
+                              ),
                               value: 'Before',
                               groupValue: _mealTiming,
                               onChanged: (value) {
@@ -569,7 +730,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                           ),
                           Expanded(
                             child: RadioListTile<String>(
-                              title: const Text('After Meal', style: TextStyle(fontSize: 13)),
+                              title: const Text(
+                                'After Meal',
+                                style: TextStyle(fontSize: 13),
+                              ),
                               value: 'After',
                               groupValue: _mealTiming,
                               onChanged: (value) {
@@ -610,7 +774,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                       Icon(Icons.add, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'Add Prescription',
+                        'Add Medicine',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -637,18 +801,18 @@ class _MedicineScreenState extends State<MedicineScreen> {
                       ),
                       elevation: 2,
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
+                        Text(
                           'Finish & Save All',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.check_circle, size: 20),
+                        SizedBox(width: 8),
+                        Icon(Icons.check_circle, size: 20),
                       ],
                     ),
                   ),
@@ -682,11 +846,12 @@ class _MedicineScreenState extends State<MedicineScreen> {
 
   Widget _buildMedicineCard(Map<String, dynamic> medicine, int index) {
     // Build timing string
-    List<String> timings = [];
-    if (medicine['morning']) timings.add('Morning');
-    if (medicine['afternoon']) timings.add('Afternoon');
-    if (medicine['evening']) timings.add('Evening');
-    final timingStr = timings.join(', ');
+   List<String> timings = [];
+  if (medicine['morning'] == true || medicine['morning'] == 1) timings.add('Morning');
+  if (medicine['afternoon'] == true || medicine['afternoon'] == 1) timings.add('Afternoon');
+  if (medicine['evening'] == true || medicine['evening'] == 1) timings.add('Evening');
+  if (medicine['night'] == true || medicine['night'] == 1) timings.add('Night');
+  final timingStr = timings.join(', ');
 
     return Card(
       color: Colors.white,
@@ -726,7 +891,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.purple.shade50,
                     borderRadius: BorderRadius.circular(6),
@@ -745,7 +913,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                 // Quantity badge (only for Syrup)
                 if (medicine['type'] == 'Syrup' && medicine['quantity'] != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.cyan.shade50,
                       borderRadius: BorderRadius.circular(6),
@@ -754,7 +925,11 @@ class _MedicineScreenState extends State<MedicineScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.water_drop, size: 12, color: Colors.cyan.shade700),
+                        Icon(
+                          Icons.water_drop,
+                          size: 12,
+                          color: Colors.cyan.shade700,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '${medicine['quantity']} ml',
@@ -769,7 +944,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
                   ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange.shade50,
                     borderRadius: BorderRadius.circular(6),
@@ -778,7 +956,11 @@ class _MedicineScreenState extends State<MedicineScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.calendar_today, size: 12, color: Colors.orange.shade700),
+                      Icon(
+                        Icons.calendar_today,
+                        size: 12,
+                        color: Colors.orange.shade700,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${medicine['days']} days',
@@ -801,10 +983,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                 Expanded(
                   child: Text(
                     timingStr,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
                   ),
                 ),
               ],
@@ -816,10 +995,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                 const SizedBox(width: 6),
                 Text(
                   '${medicine['mealTiming']} Meal',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                  ),
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
                 ),
               ],
             ),
