@@ -40,7 +40,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     return maxDays * charges;
   }
 
-
   String _generatePrescriptionText() {
     final buffer = StringBuffer();
     buffer.writeln('═══════════════════════════════════');
@@ -84,7 +83,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
       buffer.writeln('   ${medicine['mealTiming']} Meal');
       buffer.writeln('');
     }
-
 
     return buffer.toString();
   }
@@ -272,7 +270,8 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                           child: _buildInfoRow(
                             Icons.cake_outlined,
                             'Age',
-                            widget.checkupData['patientAge'] ?? 'N/A',
+                            widget.checkupData['patientAge']?.toString() ??
+                                'N/A',
                           ),
                         ),
                         Expanded(
@@ -385,7 +384,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
             }).toList(),
 
             const SizedBox(height: 16),
-
 
             // Payment Button
             SizedBox(
