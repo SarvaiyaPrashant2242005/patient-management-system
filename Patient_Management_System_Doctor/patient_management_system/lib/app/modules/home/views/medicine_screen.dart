@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'prescription_screen.dart';
 
-
 class MedicineScreen extends StatefulWidget {
   final Map<String, dynamic> checkupData;
 
@@ -40,61 +39,61 @@ class _MedicineScreenState extends State<MedicineScreen> {
     super.dispose();
   }
 
-void _handleAddMedicine() {
-  if (_formKey.currentState!.validate()) {
-    if (!_morningChecked &&
-        !_afternoonChecked &&
-        !_eveningChecked &&
-        !_nightChecked) {
+  void _handleAddMedicine() {
+    if (_formKey.currentState!.validate()) {
+      if (!_morningChecked &&
+          !_afternoonChecked &&
+          !_eveningChecked &&
+          !_nightChecked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select at least one time'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final medicineData = {
+        'name': _medicineNameController.text.trim(),
+        'type': _selectedMedicineType,
+        'days': _daysController.text.trim(),
+        'morning': _morningChecked ? 1 : 0, // Convert bool to int (0 or 1)
+        'afternoon': _afternoonChecked ? 1 : 0,
+        'evening': _eveningChecked ? 1 : 0,
+        'night': _nightChecked ? 1 : 0,
+        'mealTiming': _mealTiming,
+        'quantity': _selectedMedicineType == 'Syrup'
+            ? _quantityController.text.trim()
+            : null,
+      };
+
+      setState(() {
+        _addedMedicines.add(medicineData);
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select at least one time'),
-          backgroundColor: Colors.orange,
+          content: Text('Medicine added successfully!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
         ),
       );
-      return;
+
+      // Clear form
+      _medicineNameController.clear();
+      _daysController.clear();
+      _quantityController.clear();
+      setState(() {
+        _selectedMedicineType = 'Tablet';
+        _morningChecked = false;
+        _afternoonChecked = false;
+        _eveningChecked = false;
+        _nightChecked = false;
+        _mealTiming = 'Before';
+      });
     }
-
-    final medicineData = {
-      'name': _medicineNameController.text.trim(),
-      'type': _selectedMedicineType,
-      'days': _daysController.text.trim(),
-      'morning': _morningChecked ? 1 : 0, // Convert bool to int (0 or 1)
-      'afternoon': _afternoonChecked ? 1 : 0,
-      'evening': _eveningChecked ? 1 : 0,
-      'night': _nightChecked ? 1 : 0,
-      'mealTiming': _mealTiming,
-      'quantity': _selectedMedicineType == 'Syrup'
-          ? _quantityController.text.trim()
-          : null,
-    };
-
-    setState(() {
-      _addedMedicines.add(medicineData);
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Medicine added successfully!'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 1),
-      ),
-    );
-
-    // Clear form
-    _medicineNameController.clear();
-    _daysController.clear();
-    _quantityController.clear();
-    setState(() {
-      _selectedMedicineType = 'Tablet';
-      _morningChecked = false;
-      _afternoonChecked = false;
-      _eveningChecked = false;
-      _nightChecked = false;
-      _mealTiming = 'Before';
-    });
   }
-}
 
   void _handleRemoveMedicine(int index) {
     setState(() {
@@ -154,65 +153,79 @@ void _handleAddMedicine() {
       );
 
       // Prepare complete checkup data with medicines
-     // Prepare complete checkup data with medicines
-final completeCheckupData = {
-  'patientId': widget.checkupData['patientId'].toString(), // Convert to String
-  'patientName': widget.checkupData['patientName'],
-  'patientMobile': widget.checkupData['patientMobile'],
-  'patientAge': widget.checkupData['patientAge']?.toString(), // Handle null safely
-  'patientGender': widget.checkupData['patientGender'],
-  'dateTime': widget.checkupData['dateTime'],
-  'symptoms': widget.checkupData['symptoms'],
-  'disease': widget.checkupData['disease'],
-  'diagnosis': widget.checkupData['disease'],
-  'clinicName': widget.checkupData['clinicName'],
-  'clinicCharges': widget.checkupData['clinicCharges'].toString(),
-  'totalAmount': widget.checkupData['clinicCharges'].toString(),
-  'medicines': _addedMedicines,
-  'doctorName': doctorName,
-};
-     print('Debug checkupData types:');
-  print('patientAge type: ${widget.checkupData['patientAge'].runtimeType}');
-  print('clinicCharges type: ${widget.checkupData['clinicCharges'].runtimeType}');
-  print('Complete checkup data: $completeCheckupData');
-  print('Medicines data: $_addedMedicines');
+      // Calculate payment amount based on total days * clinic charges
+      final clinicCharges =
+          double.tryParse(widget.checkupData['clinicCharges'].toString()) ?? 0;
+      final totalDays = _addedMedicines.fold<int>(0, (sum, medicine) {
+        final days = int.tryParse(medicine['days']?.toString() ?? '0') ?? 0;
+        return sum + days;
+      });
+      final paymentAmount = totalDays * clinicCharges;
+
+      // Prepare complete checkup data with medicines
+      final completeCheckupData = {
+        'patientId': widget.checkupData['patientId']
+            .toString(), // Convert to String
+        'patientName': widget.checkupData['patientName'],
+        'patientMobile': widget.checkupData['patientMobile'],
+        'patientAge': widget.checkupData['patientAge']
+            ?.toString(), // Handle null safely
+        'patientGender': widget.checkupData['patientGender'],
+        'dateTime': widget.checkupData['dateTime'],
+        'symptoms': widget.checkupData['symptoms'],
+        'disease': widget.checkupData['disease'],
+        'diagnosis': widget.checkupData['disease'],
+        'clinicName': widget.checkupData['clinicName'],
+        'clinicCharges': widget.checkupData['clinicCharges'].toString(),
+        'totalAmount': paymentAmount.toString(),
+        'paymentAmount': paymentAmount.toString(),
+        'medicines': _addedMedicines,
+        'doctorName': doctorName,
+      };
+      print('Debug checkupData types:');
+      print('patientAge type: ${widget.checkupData['patientAge'].runtimeType}');
+      print(
+        'clinicCharges type: ${widget.checkupData['clinicCharges'].runtimeType}',
+      );
+      print('Complete checkup data: $completeCheckupData');
+      print('Medicines data: $_addedMedicines');
       print('Saving complete checkup data: $completeCheckupData');
 
       // Save prescription and get the prescription ID
-     // After getting the prescription ID, store it
-final presId = await checkupProvider.addCheckup(
-  completeCheckupData,
-  patientId: widget.checkupData['patientId'].toString(),
-);
+      // After getting the prescription ID, store it
+      final presId = await checkupProvider.addCheckup(
+        completeCheckupData,
+        patientId: widget.checkupData['patientId'].toString(),
+      );
 
-if (presId == null) {
-  if (!mounted) return;
-  Navigator.pop(context); // Close loading dialog
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        checkupProvider.errorMessage ?? 'Failed to save prescription',
-      ),
-      backgroundColor: Colors.red,
-    ),
-  );
-  return;
-}
+      if (presId == null) {
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              checkupProvider.errorMessage ?? 'Failed to save prescription',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-final String validPrescriptionId = presId.toString();
-print('Prescription saved with ID: $validPrescriptionId');
+      final String validPrescriptionId = presId.toString();
+      print('Prescription saved with ID: $validPrescriptionId');
 
-// Now save individual medicines using MedicineProvider
-final medicineProvider = Provider.of<MedicineProvider>(
-  context,
-  listen: false,
-);
+      // Now save individual medicines using MedicineProvider
+      final medicineProvider = Provider.of<MedicineProvider>(
+        context,
+        listen: false,
+      );
 
-// Use the non-nullable variable
-final medicinesSaved = await medicineProvider.addMultipleMedicines(
-  _addedMedicines,
-  prescriptionId: validPrescriptionId,
-);
+      // Use the non-nullable variable
+      final medicinesSaved = await medicineProvider.addMultipleMedicines(
+        _addedMedicines,
+        prescriptionId: validPrescriptionId,
+      );
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
 
@@ -221,21 +234,14 @@ final medicinesSaved = await medicineProvider.addMultipleMedicines(
           const SnackBar(
             content: Text('Prescription saved successfully!'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
 
-        // Navigate to Prescription Screen
-        final clinicCharges = widget.checkupData['clinicCharges'] ?? '500';
-        Navigator.push(
+        // Navigate back to clinic page
+        Navigator.of(
           context,
-          MaterialPageRoute(
-            builder: (context) => PrescriptionScreen(
-              checkupData: widget.checkupData,
-              medicines: _addedMedicines,
-              clinicCharges: clinicCharges,
-            ),
-          ),
-        );
+        ).popUntil((route) => route.settings.name == '/clinic');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -243,21 +249,14 @@ final medicinesSaved = await medicineProvider.addMultipleMedicines(
               medicineProvider.errorMessage ?? 'Failed to save medicines',
             ),
             backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
           ),
         );
 
-        // Still navigate to prescription screen as prescription was saved
-        final clinicCharges = widget.checkupData['clinicCharges'] ?? '500';
-        Navigator.push(
+        // Still navigate back to clinic page as prescription was saved
+        Navigator.of(
           context,
-          MaterialPageRoute(
-            builder: (context) => PrescriptionScreen(
-              checkupData: widget.checkupData,
-              medicines: _addedMedicines,
-              clinicCharges: clinicCharges,
-            ),
-          ),
-        );
+        ).popUntil((route) => route.settings.name == '/clinic');
       }
     } catch (e) {
       print('Error in _handleFinish: $e');
@@ -393,51 +392,9 @@ final medicinesSaved = await medicineProvider.addMultipleMedicines(
               ),
               const SizedBox(height: 16),
 
-              // Medicine Name Field
+              // Days Field (moved to top for clarity)
               const Text(
-                'Medicine Name',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _medicineNameController,
-                textCapitalization: TextCapitalization.words,
-                decoration: InputDecoration(
-                  hintText: 'Enter medicine name',
-                  prefixIcon: const Icon(
-                    Icons.medication_outlined,
-                    color: Colors.blue,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.grey),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.blue, width: 2),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter medicine name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-
-              // Days Field
-              const Text(
-                'Number of Days',
+                'Number of Days (Max: 30)',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -448,9 +405,12 @@ final medicinesSaved = await medicineProvider.addMultipleMedicines(
               TextFormField(
                 controller: _daysController,
                 keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(2),
+                ],
                 decoration: InputDecoration(
-                  hintText: 'Enter number of days',
+                  hintText: 'Enter number of days (Max: 30)',
                   prefixIcon: const Icon(
                     Icons.calendar_today_outlined,
                     color: Colors.blue,
@@ -476,6 +436,57 @@ final medicinesSaved = await medicineProvider.addMultipleMedicines(
                   final days = int.tryParse(value);
                   if (days == null || days <= 0) {
                     return 'Please enter a valid number';
+                  }
+                  if (days > 30) {
+                    return 'Days cannot exceed 30';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // Medicine Name Field
+              const Text(
+                'Medicine Name',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _medicineNameController,
+                textCapitalization: TextCapitalization.words,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z ]')),
+                ],
+                decoration: InputDecoration(
+                  hintText: 'Enter medicine name (Alphabets only)',
+                  prefixIcon: const Icon(
+                    Icons.medication_outlined,
+                    color: Colors.blue,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.grey),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.blue, width: 2),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter medicine name';
+                  }
+                  if (!RegExp(r'^[a-zA-Z ]+$').hasMatch(value.trim())) {
+                    return 'Only alphabets and spaces allowed';
                   }
                   return null;
                 },
@@ -846,12 +857,16 @@ final medicinesSaved = await medicineProvider.addMultipleMedicines(
 
   Widget _buildMedicineCard(Map<String, dynamic> medicine, int index) {
     // Build timing string
-   List<String> timings = [];
-  if (medicine['morning'] == true || medicine['morning'] == 1) timings.add('Morning');
-  if (medicine['afternoon'] == true || medicine['afternoon'] == 1) timings.add('Afternoon');
-  if (medicine['evening'] == true || medicine['evening'] == 1) timings.add('Evening');
-  if (medicine['night'] == true || medicine['night'] == 1) timings.add('Night');
-  final timingStr = timings.join(', ');
+    List<String> timings = [];
+    if (medicine['morning'] == true || medicine['morning'] == 1)
+      timings.add('Morning');
+    if (medicine['afternoon'] == true || medicine['afternoon'] == 1)
+      timings.add('Afternoon');
+    if (medicine['evening'] == true || medicine['evening'] == 1)
+      timings.add('Evening');
+    if (medicine['night'] == true || medicine['night'] == 1)
+      timings.add('Night');
+    final timingStr = timings.join(', ');
 
     return Card(
       color: Colors.white,
