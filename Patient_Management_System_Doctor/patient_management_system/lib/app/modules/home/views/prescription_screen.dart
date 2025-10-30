@@ -420,6 +420,8 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                           patient: patient,
                           doctorName: doctorName,
                           currentCharges: currentCharges,
+                          checkupData: widget.checkupData,
+                          medicines: widget.medicines,
                         ),
                       ),
                     ),

@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../services/api_services.dart';
 
 class PaymentProvider extends ChangeNotifier {
   // Reactive state
@@ -15,6 +19,10 @@ class PaymentProvider extends ChangeNotifier {
   double _openingBalance = 0;
   double _currentPayment = 0; // today's charges (from latest prescription or passed-in)
   double _amountPayingToday = 0;
+
+  // Razorpay
+  Razorpay? _razorpay;
+  Completer<bool>? _paymentCompleter;
 
   // Getters
   bool get loading => _loading;
@@ -65,20 +73,187 @@ class PaymentProvider extends ChangeNotifier {
 
   void setAmountPayingToday(String value) {
     final v = double.tryParse(value.trim()) ?? 0;
-    _amountPayingToday = v;
+    _amountPayingToday = v < 0 ? 0 : v;
     notifyListeners();
   }
 
-  Future<bool> confirmPayment() async {
+  // Data coming from UI (Prescription screen) so that on payment success we can create
+  // prescription and doses on backend.
+  Map<String, dynamic> _pendingCheckupExternal = {};
+  List<Map<String, dynamic>> _pendingMedicinesExternal = [];
+
+  void setPendingPrescriptionData({
+    required Map<String, dynamic> checkupData,
+    required List<Map<String, dynamic>> medicines,
+  }) {
+    _pendingCheckupExternal = checkupData;
+    _pendingMedicinesExternal = medicines;
+  }
+
+  Future<bool> confirmPayment({
+    required String razorpayKey,
+  }) async {
+    final checkup = _pendingCheckupExternal.isNotEmpty
+        ? _pendingCheckupExternal
+        : (_pendingCheckupData ?? {});
+    final meds = _pendingMedicinesExternal.isNotEmpty
+        ? _pendingMedicinesExternal
+        : _pendingMedicines;
+
+    final amt = _amountPayingToday;
+    if (amt <= 0) return false;
+
+    return payWithRazorpay(
+      checkupData: checkup,
+      medicines: meds,
+      amountToPay: amt,
+      razorpayKey: razorpayKey,
+    );
+  }
+
+  Future<bool> confirmCashPayment() async {
+    final checkup = _pendingCheckupExternal.isNotEmpty
+        ? _pendingCheckupExternal
+        : (_pendingCheckupData ?? {});
+    final meds = _pendingMedicinesExternal.isNotEmpty
+        ? _pendingMedicinesExternal
+        : _pendingMedicines;
+
+    final amt = _amountPayingToday;
+    if (amt <= 0) return false;
+
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _pendingCheckupData = checkup;
+      _pendingMedicines = meds;
+      _pendingAmount = amt;
+
+      final okLocal = await _persistLocalPayment();
+
+      try {
+        await _createPrescriptionAndDoses(
+          checkupData: _pendingCheckupData ?? {},
+          medicines: _pendingMedicines,
+          paymentId: '',
+          amountPaid: _pendingAmount,
+          paymentMode: 'cash',
+        );
+      } catch (_) {}
+
+      _loading = false;
+      notifyListeners();
+      return okLocal;
+    } catch (e) {
+      _loading = false;
+      _error = 'Failed to confirm cash payment';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void _initRazorpayIfNeeded() {
+    if (_razorpay != null) return;
+    _razorpay = Razorpay();
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
+    _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
+  }
+
+  Future<bool> payWithRazorpay({
+    required Map<String, dynamic> checkupData,
+    required List<Map<String, dynamic>> medicines,
+    required double amountToPay,
+    required String razorpayKey,
+  }) async {
+    // amountToPay in INR -> convert to paise
+    final int amountPaise = (amountToPay * 100).round();
+    if (amountPaise <= 0) return false;
+
+    _initRazorpayIfNeeded();
+
+    _paymentCompleter = Completer<bool>();
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    final options = {
+      'key': razorpayKey,
+      'amount': amountPaise,
+      'currency': 'INR',
+      'name': 'Clinic Payment',
+      'description': 'Consultation charges',
+      'prefill': {
+        'contact': (checkupData['patientMobile'] ?? '').toString(),
+        'email': (checkupData['patientEmail'] ?? '').toString(),
+        'name': (checkupData['patientName'] ?? _patientName).toString(),
+      },
+      'notes': {
+        'patientId': (_patientId ?? '').toString(),
+      },
+      'theme': {'color': '#1976D2'},
+    };
+
+    try {
+      _pendingCheckupData = checkupData;
+      _pendingMedicines = medicines;
+      _pendingAmount = amountToPay;
+      _razorpay!.open(options);
+      final ok = await _paymentCompleter!.future;
+      _loading = false;
+      notifyListeners();
+      return ok;
+    } catch (e) {
+      _loading = false;
+      _error = 'Failed to initiate payment';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // temp holders for post-payment
+  Map<String, dynamic>? _pendingCheckupData;
+  List<Map<String, dynamic>> _pendingMedicines = [];
+  double _pendingAmount = 0;
+
+  Future<void> _onPaymentSuccess(PaymentSuccessResponse response) async {
+    // 1) persist local payment history/balance
+    final ok = await _persistLocalPayment();
+
+    // 2) create prescription and pdose on backend (best-effort)
+    try {
+      await _createPrescriptionAndDoses(
+        checkupData: _pendingCheckupData ?? {},
+        medicines: _pendingMedicines,
+        paymentId: response.paymentId ?? '',
+        amountPaid: _pendingAmount,
+        paymentMode: 'online',
+      );
+    } catch (_) {}
+
+    _paymentCompleter?.complete(ok);
+  }
+
+  void _onPaymentError(PaymentFailureResponse response) {
+    _error = 'Payment failed';
+    _paymentCompleter?.complete(false);
+    notifyListeners();
+  }
+
+  void _onExternalWallet(ExternalWalletResponse response) {
+    // treat as cancel/no-op
+  }
+
+  Future<bool> _persistLocalPayment() async {
     if (_patientId == null) return false;
     try {
       final prefs = await SharedPreferences.getInstance();
       final newBalance = remainingBalance;
 
-      // Persist new balance
       await prefs.setString('balance_$_patientId', newBalance.toStringAsFixed(2));
 
-      // Append history
       final historyKey = 'payments_$_patientId';
       final entry = {
         'date': DateTime.now().toIso8601String(),
@@ -93,7 +268,6 @@ class PaymentProvider extends ChangeNotifier {
       list.add(entry);
       await prefs.setString(historyKey, json.encode(list));
 
-      // After success: update in-memory openingBalance and clear currentPayment/amountPaying
       _openingBalance = newBalance;
       _currentPayment = 0;
       _amountPayingToday = 0;
@@ -101,10 +275,106 @@ class PaymentProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = 'Payment failed';
+      _error = 'Payment success but local save failed';
       notifyListeners();
       return false;
     }
+  }
+
+  Future<void> _createPrescriptionAndDoses({
+    required Map<String, dynamic> checkupData,
+    required List<Map<String, dynamic>> medicines,
+    required String paymentId,
+    required double amountPaid,
+    String paymentMode = 'online',
+  }) async {
+    try {
+      // auth token (optional)
+      String? token;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        token = prefs.getString('authToken');
+      } catch (_) {}
+
+      // Prepare prescription body similar to CheckupProvider
+      final String? pidStr = (checkupData['patientId'] ?? checkupData['id'])?.toString();
+      final double? payAmount = amountPaid;
+      final Map<String, dynamic> presBody = {
+        'patient_id': pidStr != null ? int.tryParse(pidStr) : null,
+        'date': checkupData['dateTime'] ?? DateTime.now().toIso8601String(),
+        'dieases': checkupData['disease'] ?? checkupData['diagnosis'] ?? '',
+        'symptoms': checkupData['symptoms'] ?? '',
+        'payment_mode': paymentMode == 'cash' ? 'cash' : 'online',
+        'payment_amount': payAmount,
+        'payment_ref': paymentId,
+      };
+
+      final presResp = await ApiService.post('prescriptions', presBody, token: token);
+      int? presId;
+      if (presResp is Map) {
+        if (presResp['data'] is Map && (presResp['data']['id'] is int)) {
+          presId = presResp['data']['id'] as int;
+        } else if (presResp['id'] is int) {
+          presId = presResp['id'] as int;
+        }
+      }
+
+      if (presId == null) return; // cannot add doses without pres id
+
+      for (final med in medicines) {
+        final doseBody = _prepareDoseData(med, presId.toString());
+        try {
+          await ApiService.post('pdose', doseBody, token: token);
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  Map<String, dynamic> _prepareDoseData(Map<String, dynamic> medicine, String? prescriptionId) {
+    final bool morning = medicine['morning'] == true || medicine['morning'] == 1;
+    final bool afternoon = medicine['afternoon'] == true || medicine['afternoon'] == 1;
+    final bool evening = medicine['evening'] == true || medicine['evening'] == 1;
+    final bool night = medicine['night'] == true || medicine['night'] == 1;
+
+    String timeOfDay;
+    if (morning) {
+      timeOfDay = 'morning';
+    } else if (afternoon) {
+      timeOfDay = 'afternoon';
+    } else if (evening || night) {
+      timeOfDay = 'evening';
+    } else {
+      timeOfDay = 'morning';
+    }
+
+    final String uiType = (medicine['type'] ?? 'Tablet').toString();
+    final String backendType = uiType.toLowerCase() == 'syrup' ? 'syrup' : 'capsule';
+
+    final int days = int.tryParse('${medicine['days'] ?? '0'}') ?? 0;
+    final String mealTiming = (medicine['mealTiming'] ?? 'Before').toString().toLowerCase();
+
+    int quantity;
+    if (backendType == 'syrup') {
+      quantity = int.tryParse('${medicine['quantity'] ?? '5'}') ?? 5;
+    } else {
+      quantity = 1;
+    }
+
+    return {
+      'pres_id': int.tryParse('${prescriptionId ?? medicine['prescriptionId'] ?? ''}') ?? 0,
+      'days': days,
+      'medicine_type': backendType,
+      'medicine_name': medicine['name']?.toString() ?? '',
+      'time_of_day': timeOfDay,
+      'meal_time': mealTiming == 'after' ? 'after' : 'before',
+      'quantity': quantity,
+    };
+  }
+
+  @override
+  void dispose() {
+    _razorpay?.clear();
+    super.dispose();
   }
 
   Future<List<Map<String, dynamic>>> loadHistory() async {

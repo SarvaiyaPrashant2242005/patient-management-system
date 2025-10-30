@@ -4,7 +4,7 @@ import 'package:patient_management_system/app/data/providers/checkup_provider.da
 import 'package:patient_management_system/app/data/providers/medicine_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'prescription_screen.dart';
+import 'payment_screen.dart';
 
 class MedicineScreen extends StatefulWidget {
   final Map<String, dynamic> checkupData;
@@ -119,57 +119,30 @@ class _MedicineScreenState extends State<MedicineScreen> {
       return;
     }
 
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return const Center(
-          child: Card(
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Saving prescription...'),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
     try {
-      // Get doctor name
       final doctorName = await _getDoctorName();
 
-      // First, save the prescription using CheckupProvider
-      final checkupProvider = Provider.of<CheckupProvider>(
-        context,
-        listen: false,
-      );
-
-      // Prepare complete checkup data with medicines
-      // Calculate payment amount based on total days * clinic charges
-      final clinicCharges =
-          double.tryParse(widget.checkupData['clinicCharges'].toString()) ?? 0;
+      // Calculate current payment as per agreed logic: totalDays * clinicCharges
+      final clinicCharges = double.tryParse(widget.checkupData['clinicCharges'].toString()) ?? 0.0;
       final totalDays = _addedMedicines.fold<int>(0, (sum, medicine) {
         final days = int.tryParse(medicine['days']?.toString() ?? '0') ?? 0;
         return sum + days;
       });
-      final paymentAmount = totalDays * clinicCharges;
+      final double currentPayment = totalDays * clinicCharges;
 
-      // Prepare complete checkup data with medicines
+      // Build patient map needed by payment screen
+      final patient = {
+        'id': widget.checkupData['patientId']?.toString(),
+        'name': widget.checkupData['patientName']?.toString(),
+        'mobile': widget.checkupData['patientMobile']?.toString(),
+      };
+
+      // Prepare checkup data payload to be used later after payment
       final completeCheckupData = {
-        'patientId': widget.checkupData['patientId']
-            .toString(), // Convert to String
+        'patientId': widget.checkupData['patientId']?.toString(),
         'patientName': widget.checkupData['patientName'],
         'patientMobile': widget.checkupData['patientMobile'],
-        'patientAge': widget.checkupData['patientAge']
-            ?.toString(), // Handle null safely
+        'patientAge': widget.checkupData['patientAge']?.toString(),
         'patientGender': widget.checkupData['patientGender'],
         'dateTime': widget.checkupData['dateTime'],
         'symptoms': widget.checkupData['symptoms'],
@@ -177,94 +150,30 @@ class _MedicineScreenState extends State<MedicineScreen> {
         'diagnosis': widget.checkupData['disease'],
         'clinicName': widget.checkupData['clinicName'],
         'clinicCharges': widget.checkupData['clinicCharges'].toString(),
-        'totalAmount': paymentAmount.toString(),
-        'paymentAmount': paymentAmount.toString(),
-        'medicines': _addedMedicines,
+        'totalAmount': currentPayment.toString(),
+        'paymentAmount': currentPayment.toString(),
         'doctorName': doctorName,
       };
-      print('Debug checkupData types:');
-      print('patientAge type: ${widget.checkupData['patientAge'].runtimeType}');
-      print(
-        'clinicCharges type: ${widget.checkupData['clinicCharges'].runtimeType}',
-      );
-      print('Complete checkup data: $completeCheckupData');
-      print('Medicines data: $_addedMedicines');
-      print('Saving complete checkup data: $completeCheckupData');
 
-      // Save prescription and get the prescription ID
-      // After getting the prescription ID, store it
-      final presId = await checkupProvider.addCheckup(
-        completeCheckupData,
-        patientId: widget.checkupData['patientId'].toString(),
-      );
-
-      if (presId == null) {
-        if (!mounted) return;
-        Navigator.pop(context); // Close loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              checkupProvider.errorMessage ?? 'Failed to save prescription',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      final String validPrescriptionId = presId.toString();
-      print('Prescription saved with ID: $validPrescriptionId');
-
-      // Now save individual medicines using MedicineProvider
-      final medicineProvider = Provider.of<MedicineProvider>(
+      // Navigate to payment screen; payment provider will store pending data
+      if (!mounted) return;
+      Navigator.push(
         context,
-        listen: false,
-      );
-
-      // Use the non-nullable variable
-      final medicinesSaved = await medicineProvider.addMultipleMedicines(
-        _addedMedicines,
-        prescriptionId: validPrescriptionId,
-      );
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-
-      if (medicinesSaved) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Prescription saved successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+        MaterialPageRoute(
+          builder: (_) => PatientPaymentPage(
+            patient: patient,
+            doctorName: doctorName,
+            currentCharges: currentPayment,
+            checkupData: completeCheckupData,
+            medicines: List<Map<String, dynamic>>.from(_addedMedicines),
           ),
-        );
-
-        // Navigate back to clinic page
-        Navigator.of(
-          context,
-        ).popUntil((route) => route.settings.name == '/clinic');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              medicineProvider.errorMessage ?? 'Failed to save medicines',
-            ),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        // Still navigate back to clinic page as prescription was saved
-        Navigator.of(
-          context,
-        ).popUntil((route) => route.settings.name == '/clinic');
-      }
+          settings: const RouteSettings(name: '/payment'),
+        ),
+      );
     } catch (e) {
-      print('Error in _handleFinish: $e');
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text('Error preparing payment: ${e.toString()}'),
           backgroundColor: Colors.red,
         ),
       );
